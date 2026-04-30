@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+@import "tailwindcss";
+
+:root {
+    --c-bg: #F7F5F0;
+    --c-surface: #FFFFFF;
+    --c-surface-alt: #F0EDE6;
+    --c-border: #E2DDD5;
+    --c-text: #1A1714;
+    --c-text-muted: #6B6560;
+    --c-accent: #C8502A;
+    --c-accent-soft: #F5E8E3;
+    --c-green: #2A7A4F;
+    --c-green-soft: #E3F2EB;
+    --c-blue: #2A4F8A;
+    --c-blue-soft: #E3EBF8;
+    --c-yellow: #B87D1A;
+    --c-yellow-soft: #FBF3E0;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body, #root {
+    height: 100%;
+    font-family: 'DM Sans', sans-serif;
+    background: var(--c-bg);
+    color: var(--c-text);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--c-border);
+    border-radius: 3px;
+}
+
+/* Utility classes */
+.serif {
+    font-family: 'DM Serif Display', serif;
+}
+
+/* Transitions */
+* {
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}

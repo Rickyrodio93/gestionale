@@ -13,6 +13,7 @@ import {
   useConfirm,
 } from "./ui.jsx";
 import { CATEGORIE_SPESA, formatEuro, formatDate } from "./store.js";
+import { Pencil, Trash2 } from "lucide-react";
 
 const FREQUENZE = [
   "mensile",
@@ -269,14 +270,14 @@ export default function Spese({ data, addItem, removeItem, updateItem }) {
                     className="text-xs px-2"
                     onClick={() => setModal({ edit: s })}
                   >
-                    ✏️
+                    <Pencil/>
                   </Btn>
                   <Btn
                     variant="danger"
                     className="text-xs px-2"
                     onClick={() => ask(() => removeItem("spese", s.id))}
                   >
-                    🗑
+                    <Trash2/>
                   </Btn>
                 </div>
               </Card>

@@ -13,6 +13,7 @@ import {
   useConfirm,
 } from "./ui.jsx";
 import { CATEGORIE_VOCE, UM_OPTIONS, formatEuro, formatDate } from "./store.js";
+import { Hammer, Pencil, Trash2 } from "lucide-react";
 
 const STATI = [
   { value: "pianificato", label: "Pianificato", color: "blue" },
@@ -367,7 +368,7 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
 
       {filtered.length === 0 ? (
         <EmptyState
-          icon="🔨"
+          icon={<Hammer/>}
           title="Nessun lavoro"
           description="Aggiungi ristrutturazioni e computi metrici per tracciare i costi dei lavori."
           action={<Btn onClick={() => setModal("new")}>Aggiungi lavoro</Btn>}
@@ -398,7 +399,7 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
                     className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
                     style={{ background: "var(--c-yellow-soft)" }}
                   >
-                    🔨
+                    <Hammer/>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -528,14 +529,14 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
                       className="text-xs px-2"
                       onClick={() => setModal({ edit: l })}
                     >
-                      ✏️
+                      <Pencil/>
                     </Btn>
                     <Btn
                       variant="danger"
                       className="text-xs px-2"
                       onClick={() => ask(() => removeItem("lavori", l.id))}
                     >
-                      🗑
+                      <Trash2 />
                     </Btn>
                   </div>
                 </div>

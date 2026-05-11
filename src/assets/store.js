@@ -5,7 +5,7 @@ const STORAGE_KEY = 'gestionale_v1'
 const defaultData = {
     immobili: [
         { id: '1', nome: 'Via morosini, 17, Varese', tipo: 'appartamento', mq: 104, piano: 3, note: 'trilocale con balcone' },
-        { id: '2', nome: 'Corso Buenos Aires 45, Milano', tipo: 'appartamento', mq: 55, piano: 4, note: 'Monolocale ristrutturato' },
+        { id: '2', nome: 'via Postumia, 3, Varese', tipo: 'appartamento', mq: 55, piano: 4, note: 'Monolocale ristrutturato' },
     ],
     spese: [
         { id: '1', immobileId: '1', categoria: 'luce', fornitore: 'Enel', importo: 87.50, data: '2025-03-10', note: 'Bolletta bimestrale', ricorrente: true, frequenza: 'bimestrale' },

@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useState } from "react";
 
 /* ── Modal ── */
@@ -30,10 +31,10 @@ export function Modal({ title, onClose, children, wide }) {
               color: "var(--c-text-muted)",
             }}
           >
-            ✕
+            <X/>
           </button>
         </div>
-        <div className="p-6 overflow-y-auto" style={{ maxHeight: "75vh" }}>
+        <div className="p-6 overflow-y-auto max-h-[75vh]">
           {children}
         </div>
       </div>

@@ -5,18 +5,20 @@ import Immobili from "./Immobili.jsx";
 import Spese from "./Spese.jsx";
 import Rendite from "./Rendite.jsx";
 import Lavori from "./Lavori.jsx";
+import Sidebar, { SidebarItem } from "../components/sidebar.jsx";
+import { BadgeEuro, ClipboardList, Hammer, House, LayoutDashboard, LayoutDashboardIcon } from "lucide-react";
 
 const NAV = [
-  { id: "dashboard", label: "Dashboard", icon: "◉" },
-  { id: "immobili", label: "Immobili", icon: "🏠" },
-  { id: "spese", label: "Spese", icon: "📋" },
-  { id: "rendite", label: "Rendite", icon: "💰" },
-  { id: "lavori", label: "Lavori", icon: "🔨" },
+  { id: "dashboard", label: "Dashboard", icon: <LayoutDashboardIcon/>, alert },
+  { id: "immobili", label: "Immobili", icon: <House /> },
+  { id: "spese", label: "Spese", icon: <ClipboardList /> },
+  { id: "rendite", label: "Rendite", icon: <BadgeEuro /> },
+  { id: "lavori", label: "Lavori", icon: <Hammer /> },
 ];
 
 export default function App() {
   const [page, setPage] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const store = useStore();
 
   const props = {
@@ -38,7 +40,22 @@ export default function App() {
   return (
     <div className="flex h-full" style={{ background: "var(--c-bg)" }}>
       {/* Sidebar */}
-      <aside
+      <Sidebar>
+        {NAV.map((n) => {
+          const active = page === n.id;
+          return (
+            <SidebarItem
+            active={active}
+              key={n.id}
+              onClick={() => setPage(n.id)}
+              text={n.label}
+              icon={n.icon}
+              alert={n.alert}
+            />
+          );
+        })}
+      </Sidebar>
+      {/* <aside
         className="flex flex-col shrink-0 h-full"
         style={{
           width: 220,
@@ -47,23 +64,9 @@ export default function App() {
           position: "sticky",
           top: 0,
         }}
-      >
-        {/* Logo */}
-        <div
-          className="px-5 py-5"
-          style={{ borderBottom: "1px solid var(--c-border)" }}
-        >
-          <div className="serif text-xl leading-tight">Gestionale</div>
-          <div
-            className="text-xs mt-0.5"
-            style={{ color: "var(--c-text-muted)" }}
-          >
-            Portfolio Immobiliare
-          </div>
-        </div>
+      > */}
 
-        {/* Nav */}
-        <nav className="flex-1 py-4 px-3 flex flex-col gap-1">
+      {/* <nav className="flex-1 py-4 px-3 flex flex-col gap-1">
           {NAV.map((n) => {
             const active = page === n.id;
             return (
@@ -83,10 +86,10 @@ export default function App() {
               </button>
             );
           })}
-        </nav>
+        </nav> */}
 
-        {/* Footer */}
-        <div
+      {/* Footer */}
+      {/* <div
           className="px-5 py-4"
           style={{ borderTop: "1px solid var(--c-border)" }}
         >
@@ -94,7 +97,7 @@ export default function App() {
             {store.data.immobili?.length || 0} immobili · dati locali
           </div>
         </div>
-      </aside>
+      </aside> */}
 
       {/* Main */}
       <main className="flex-1 overflow-y-auto">

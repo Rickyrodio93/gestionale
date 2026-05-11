@@ -13,6 +13,7 @@ import {
   useConfirm,
 } from "./ui.jsx";
 import { formatEuro, formatDate } from "./store.js";
+import { Pencil, Trash2 } from "lucide-react";
 
 const PIATTAFORME = ["Airbnb", "Booking.com", "Vrbo", "Diretto", "Altra"];
 
@@ -499,7 +500,7 @@ export default function Rendite({ data, addItem, removeItem, updateItem }) {
                             className="text-xs px-2"
                             onClick={() => setModal({ edit: r })}
                           >
-                            ✏️
+                            <Pencil />
                           </Btn>
                           <Btn
                             variant="danger"
@@ -508,7 +509,7 @@ export default function Rendite({ data, addItem, removeItem, updateItem }) {
                               ask(() => removeItem("rendite", r.id))
                             }
                           >
-                            🗑
+                            <Trash2/>
                           </Btn>
                         </div>
                       </Card>
@@ -589,7 +590,7 @@ export default function Rendite({ data, addItem, removeItem, updateItem }) {
                               className="text-xs px-2"
                               onClick={() => setModal({ edit: r })}
                             >
-                              ✏️
+                              <Pencil />
                             </Btn>
                             <Btn
                               variant="danger"
@@ -598,7 +599,7 @@ export default function Rendite({ data, addItem, removeItem, updateItem }) {
                                 ask(() => removeItem("rendite", r.id))
                               }
                             >
-                              🗑
+                              <Trash2/>
                             </Btn>
                           </div>
                         </div>

@@ -4,8 +4,8 @@ const STORAGE_KEY = 'gestionale_v1'
 
 const defaultData = {
     immobili: [
-        { id: '1', nome: 'Via morosini, 17, Varese', tipo: 'appartamento', mq: 104, piano: 3, note: 'trilocale con balcone' },
-        { id: '2', nome: 'via Postumia, 3, Varese', tipo: 'appartamento', mq: 55, piano: 4, note: 'Monolocale ristrutturato' },
+        { id: '1', nome: 'Via Roma 12, Milano', tipo: 'appartamento', mq: 75, piano: 2, note: 'Bilocale con balcone' },
+        { id: '2', nome: 'Corso Buenos Aires 45, Milano', tipo: 'appartamento', mq: 55, piano: 4, note: 'Monolocale ristrutturato' },
     ],
     spese: [
         { id: '1', immobileId: '1', categoria: 'luce', fornitore: 'Enel', importo: 87.50, data: '2025-03-10', note: 'Bolletta bimestrale', ricorrente: true, frequenza: 'bimestrale' },
@@ -33,13 +33,19 @@ const defaultData = {
             ],
             note: 'Bagno principale'
         },
-    ]
+    ],
+    ripartizioni: [],
 }
 
 function load() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY)
-        if (raw) return JSON.parse(raw)
+        if (raw) {
+            const parsed = JSON.parse(raw)
+            // migrazione: aggiungi ripartizioni se mancante
+            if (!parsed.ripartizioni) parsed.ripartizioni = []
+            return parsed
+        }
     } catch (e) { }
     return defaultData
 }
@@ -58,17 +64,20 @@ export function useStore() {
     }, [])
 
     const addItem = useCallback((key, item) => {
-        setData(prev => ({ ...prev, [key]: [...prev[key], { ...item, id: Date.now().toString() }] }))
+        setData(prev => ({
+            ...prev,
+            [key]: [...(prev[key] || []), { ...item, id: Date.now().toString() }]
+        }))
     }, [])
 
     const removeItem = useCallback((key, id) => {
-        setData(prev => ({ ...prev, [key]: prev[key].filter(x => x.id !== id) }))
+        setData(prev => ({ ...prev, [key]: (prev[key] || []).filter(x => x.id !== id) }))
     }, [])
 
     const updateItem = useCallback((key, id, changes) => {
         setData(prev => ({
             ...prev,
-            [key]: prev[key].map(x => x.id === id ? { ...x, ...changes } : x)
+            [key]: (prev[key] || []).map(x => x.id === id ? { ...x, ...changes } : x)
         }))
     }, [])
 

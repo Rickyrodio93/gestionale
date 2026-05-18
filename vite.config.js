@@ -8,4 +8,9 @@ export default defineConfig({
     plugins: [react(),
     tailwindcss(),
     ],
+    server: {
+        proxy: {
+            '/api/anthropic': 'http://localhost:3001',
+        },
+    },
 })

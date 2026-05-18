@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Modal,
   Field,
@@ -13,7 +13,7 @@ import {
   useConfirm,
 } from "./ui.jsx";
 import { CATEGORIE_VOCE, UM_OPTIONS, formatEuro, formatDate } from "./store.js";
-import { Hammer, Pencil, Trash2 } from "lucide-react";
+import { Paperclip } from "lucide-react";
 
 const STATI = [
   { value: "pianificato", label: "Pianificato", color: "blue" },
@@ -22,15 +22,21 @@ const STATI = [
   { value: "sospeso", label: "Sospeso", color: "default" },
 ];
 
+/* ── Riga voce computo ── */
 function VoceRow({ v, onChange, onRemove }) {
   const set = (k, val) => onChange({ ...v, [k]: val });
   const totale = Number(v.quantita || 0) * Number(v.prezzoUnitario || 0);
   return (
     <div
-      className="grid gap-2 p-3 rounded-xl"
       style={{
+        display: "grid",
+        gap: 6,
+        padding: "10px 12px",
+        borderRadius: 10,
         background: "var(--c-surface-alt)",
-        gridTemplateColumns: "2fr 80px 80px 100px 100px auto",
+        border: "1px solid var(--c-border)",
+        gridTemplateColumns: "2fr 72px 80px 96px 100px 28px",
+        alignItems: "center",
       }}
     >
       <Input
@@ -60,16 +66,32 @@ function VoceRow({ v, onChange, onRemove }) {
         placeholder="€/um"
       />
       <div
-        className="flex items-center justify-end font-600 text-sm pr-1"
-        style={{ color: "var(--c-text)" }}
+        style={{
+          textAlign: "right",
+          fontWeight: 700,
+          fontSize: 13,
+          color: "var(--c-text)",
+          paddingRight: 4,
+        }}
       >
         {formatEuro(totale)}
       </div>
       <button
         onClick={onRemove}
         type="button"
-        className="w-7 h-7 rounded-lg text-sm flex items-center justify-center"
-        style={{ background: "#fee2e2", color: "#dc2626", cursor: "pointer" }}
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 6,
+          border: "none",
+          background: "var(--c-red-soft)",
+          color: "#dc2626",
+          cursor: "pointer",
+          fontSize: 11,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
       >
         ✕
       </button>
@@ -77,6 +99,217 @@ function VoceRow({ v, onChange, onRemove }) {
   );
 }
 
+/* ── Upload preventivo con parsing AI ── */
+function PreventivoUploader({ onVociExtracted }) {
+  const [stato, setStato] = useState("idle"); // idle | loading | done | error
+  const [msg, setMsg] = useState("");
+  const [fileName, setFileName] = useState("");
+  const inputRef = useRef();
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    setFileName(file.name);
+    setStato("loading");
+    setMsg("Analisi del preventivo in corso...");
+
+    try {
+      // Leggi file come base64
+      const base64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result.split(",")[1]);
+        reader.onerror = () => rej(new Error("Errore lettura file"));
+        reader.readAsDataURL(file);
+      });
+
+      const isPDF = file.type === "application/pdf";
+      const mediaType = isPDF ? "application/pdf" : file.type;
+
+      const prompt = `Sei un assistente per la gestione di immobili. Analizza questo preventivo di lavori edili/ristrutturazione ed estrai tutte le voci di computo metrico.
+
+Per ogni voce che trovi, restituisci un JSON array con oggetti in questo formato:
+{
+  "descrizione": "descrizione della lavorazione",
+  "um": "unità di misura (usa solo: mq, ml, pz, ore, kg, lt, corpo)",
+  "quantita": numero,
+  "prezzoUnitario": numero,
+  "categoria": "materiali" oppure "manodopera" oppure "trasporto" oppure "altro"
+}
+
+Se un campo non è presente nel preventivo, usa valori ragionevoli o 0.
+Rispondi SOLO con il JSON array, senza testo aggiuntivo, senza markdown, senza backtick.`;
+
+      const body = {
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: isPDF ? "document" : "image",
+                source: { type: "base64", media_type: mediaType, data: base64 },
+              },
+              { type: "text", text: prompt },
+            ],
+          },
+        ],
+      };
+
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await resp.json();
+      const text = (data.content || []).map((c) => c.text || "").join("");
+
+      // Pulisci e parsa JSON
+      const clean = text.replace(/```json|```/g, "").trim();
+      const voci = JSON.parse(clean);
+
+      if (!Array.isArray(voci) || voci.length === 0)
+        throw new Error("Nessuna voce trovata");
+
+      setStato("done");
+      setMsg(`✓ Estratte ${voci.length} voci dal preventivo`);
+      onVociExtracted(
+        voci.map((v) => ({
+          id: Date.now().toString() + Math.random(),
+          descrizione: String(v.descrizione || ""),
+          um: UM_OPTIONS.includes(v.um) ? v.um : "pz",
+          quantita: String(Number(v.quantita) || ""),
+          prezzoUnitario: String(Number(v.prezzoUnitario) || ""),
+          categoria: ["materiali", "manodopera", "trasporto", "altro"].includes(
+            v.categoria,
+          )
+            ? v.categoria
+            : "materiali",
+        })),
+      );
+    } catch (err) {
+      setStato("error");
+      setMsg(
+        `Errore: ${err.message}. Verifica che il file sia un PDF o immagine chiara.`,
+      );
+    }
+  };
+
+  return (
+    <div>
+      <div
+        onClick={() => stato !== "loading" && inputRef.current?.click()}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          handleFile(e.dataTransfer.files[0]);
+        }}
+        style={{
+          border: `2px dashed ${stato === "done" ? "var(--c-green)" : stato === "error" ? "#dc2626" : "var(--c-border)"}`,
+          borderRadius: 12,
+          padding: "20px 16px",
+          textAlign: "center",
+          cursor: stato === "loading" ? "not-allowed" : "pointer",
+          background:
+            stato === "done"
+              ? "var(--c-green-soft)"
+              : stato === "error"
+                ? "var(--c-red-soft)"
+                : "var(--c-surface-alt)",
+          transition: "all 0.15s",
+        }}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept="application/pdf,image/*"
+          style={{ display: "none" }}
+          onChange={(e) => handleFile(e.target.files[0])}
+        />
+        <div style={{ fontSize: 24, marginBottom: 8 }}>
+          {stato === "loading" ? (
+            "⏳"
+          ) : stato === "done" ? (
+            "✅"
+          ) : stato === "error" ? (
+            "❌"
+          ) : (
+            <Paperclip />
+          )}
+        </div>
+        <div
+          style={{
+            fontWeight: 600,
+            fontSize: 13,
+            color: "var(--c-text)",
+            marginBottom: 4,
+          }}
+        >
+          {stato === "idle" ? "Carica preventivo PDF o immagine" : fileName}
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            color:
+              stato === "error"
+                ? "#dc2626"
+                : stato === "done"
+                  ? "var(--c-green)"
+                  : "var(--c-text-muted)",
+          }}
+        >
+          {stato === "idle"
+            ? "Trascina qui o clicca per selezionare · PDF, JPG, PNG"
+            : msg}
+        </div>
+        {stato === "loading" && (
+          <div
+            style={{
+              marginTop: 10,
+              height: 3,
+              borderRadius: 2,
+              background: "var(--c-border)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                borderRadius: 2,
+                background: "var(--c-accent)",
+                animation: "pulse 1.2s ease-in-out infinite",
+                width: "60%",
+                marginLeft: "20%",
+              }}
+            />
+          </div>
+        )}
+      </div>
+      {(stato === "done" || stato === "error") && (
+        <button
+          onClick={() => {
+            setStato("idle");
+            setMsg("");
+            setFileName("");
+          }}
+          style={{
+            marginTop: 6,
+            fontSize: 11,
+            color: "var(--c-text-muted)",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          ↩ Carica un altro file
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ── Form lavoro ── */
 function LavoroForm({ init = {}, immobili, onSave, onClose }) {
   const [form, setForm] = useState({
     immobileId: immobili[0]?.id || "",
@@ -89,6 +322,7 @@ function LavoroForm({ init = {}, immobili, onSave, onClose }) {
     ...init,
   });
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  const [showUpload, setShowUpload] = useState(false);
 
   const addVoce = () =>
     set("voci", [
@@ -120,6 +354,14 @@ function LavoroForm({ init = {}, immobili, onSave, onClose }) {
     0,
   );
 
+  const totPerCat = (cat) =>
+    (form.voci || [])
+      .filter((v) => v.categoria === cat)
+      .reduce(
+        (a, v) => a + Number(v.quantita || 0) * Number(v.prezzoUnitario || 0),
+        0,
+      );
+
   return (
     <form
       className="flex flex-col gap-4"
@@ -129,7 +371,7 @@ function LavoroForm({ init = {}, immobili, onSave, onClose }) {
       }}
     >
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Immobile">
+        <Field label="Immobile / Palazzina">
           <Select
             value={form.immobileId}
             onChange={(e) => set("immobileId", e.target.value)}
@@ -137,7 +379,8 @@ function LavoroForm({ init = {}, immobili, onSave, onClose }) {
           >
             {immobili.map((i) => (
               <option key={i.id} value={i.id}>
-                {i.nome}
+                {i._tipo === "palazzina" ? "🏢 " : "🏠 "}
+                {i.nome || i.indirizzo}
               </option>
             ))}
           </Select>
@@ -159,7 +402,7 @@ function LavoroForm({ init = {}, immobili, onSave, onClose }) {
         <Input
           value={form.titolo}
           onChange={(e) => set("titolo", e.target.value)}
-          placeholder="es. Rifacimento bagno principale"
+          placeholder="es. Rifacimento facciata, ristrutturazione bagno..."
           required
         />
       </Field>
@@ -171,7 +414,7 @@ function LavoroForm({ init = {}, immobili, onSave, onClose }) {
             onChange={(e) => set("dataInizio", e.target.value)}
           />
         </Field>
-        <Field label="Data fine">
+        <Field label="Data fine prevista">
           <Input
             type="date"
             value={form.dataFine}
@@ -183,102 +426,213 @@ function LavoroForm({ init = {}, immobili, onSave, onClose }) {
         <Textarea
           value={form.note}
           onChange={(e) => set("note", e.target.value)}
+          placeholder="Impresa, contatti, condizioni, ecc."
         />
       </Field>
 
       {/* Computo metrico */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label
-            className="text-xs font-600 uppercase tracking-wider"
-            style={{ color: "var(--c-text-muted)" }}
-          >
-            Computo metrico
-          </label>
-          {form.voci?.length > 0 && (
-            <div className="flex gap-2">
-              {["materiali", "manodopera", "altro"].map((cat) => {
-                const sub = (form.voci || [])
-                  .filter((v) => v.categoria === cat)
-                  .reduce(
-                    (a, v) =>
-                      a +
-                      Number(v.quantita || 0) * Number(v.prezzoUnitario || 0),
-                    0,
-                  );
-                if (sub === 0) return null;
-                return (
-                  <span
-                    key={cat}
-                    className="text-xs"
-                    style={{ color: "var(--c-text-muted)" }}
-                  >
-                    {cat}: {formatEuro(sub)}
-                  </span>
-                );
-              })}
+      <div
+        style={{
+          border: "1px solid var(--c-border)",
+          borderRadius: 14,
+          overflow: "hidden",
+        }}
+      >
+        {/* Header sezione */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 16px",
+            background: "var(--c-surface-alt)",
+            borderBottom: "1px solid var(--c-border)",
+          }}
+        >
+          <div style={{ fontWeight: 600, fontSize: 13 }}>Computo metrico</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              type="button"
+              onClick={() => setShowUpload((s) => !s)}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 8,
+                border: "1px solid var(--c-border)",
+                background: showUpload
+                  ? "var(--c-accent-soft)"
+                  : "var(--c-surface)",
+                color: showUpload ? "var(--c-accent)" : "var(--c-text-muted)",
+                fontSize: 12,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                fontWeight: 500,
+              }}
+              className="flex items-center justify-between"
+            >
+              <Paperclip /> Carica preventivo AI
+            </button>
+            <button
+              type="button"
+              onClick={addVoce}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 8,
+                border: "1px solid var(--c-border)",
+                background: "var(--c-surface)",
+                color: "var(--c-text-muted)",
+                fontSize: 12,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                fontWeight: 500,
+              }}
+            >
+              ＋ Voce manuale
+            </button>
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: "14px 16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          {/* Upload area */}
+          {showUpload && (
+            <PreventivoUploader
+              onVociExtracted={(nuoveVoci) => {
+                set("voci", [...(form.voci || []), ...nuoveVoci]);
+                setShowUpload(false);
+              }}
+            />
+          )}
+
+          {/* Intestazione colonne */}
+          {(form.voci || []).length > 0 && (
+            <div
+              style={{
+                display: "grid",
+                gap: 6,
+                padding: "0 12px",
+                gridTemplateColumns: "2fr 72px 80px 96px 100px 28px",
+                fontSize: 10,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: "var(--c-text-muted)",
+              }}
+            >
+              <span>Descrizione</span>
+              <span>U.M.</span>
+              <span>Qtà</span>
+              <span>€/U.M.</span>
+              <span style={{ textAlign: "right" }}>Totale</span>
+              <span />
             </div>
           )}
-        </div>
 
-        {/* Header */}
-        {form.voci?.length > 0 && (
-          <div
-            className="grid gap-2 px-3 py-1 text-xs font-600 uppercase tracking-wider"
-            style={{
-              gridTemplateColumns: "2fr 80px 80px 100px 100px auto",
-              color: "var(--c-text-muted)",
-            }}
-          >
-            <span>Descrizione</span>
-            <span>U.M.</span>
-            <span>Qtà</span>
-            <span>€/U.M.</span>
-            <span className="text-right">Totale</span>
-            <span></span>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-2">
-          {(form.voci || []).map((v, i) => (
-            <div key={v.id} className="flex flex-col gap-1">
-              <div className="flex gap-2 items-center px-3">
-                <Select
-                  value={v.categoria}
-                  onChange={(e) => updateVoce(i, { categoria: e.target.value })}
-                  style={{ width: "auto" }}
+          {/* Raggruppa per categoria */}
+          {["materiali", "manodopera", "trasporto", "altro"].map((cat) => {
+            const vociCat = (form.voci || [])
+              .map((v, i) => ({ v, i }))
+              .filter(({ v }) => v.categoria === cat);
+            if (vociCat.length === 0) return null;
+            const subTot = vociCat.reduce(
+              (a, { v }) =>
+                a + Number(v.quantita || 0) * Number(v.prezzoUnitario || 0),
+              0,
+            );
+            const catLabel = {
+              materiali: "🧱 Materiali",
+              manodopera: "👷 Manodopera",
+              trasporto: "🚛 Trasporto",
+              altro: "📌 Altro",
+            }[cat];
+            return (
+              <div key={cat}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 6,
+                  }}
                 >
-                  {CATEGORIE_VOCE.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "var(--c-text-muted)",
+                    }}
+                  >
+                    {catLabel}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "var(--c-text-muted)",
+                    }}
+                  >
+                    {formatEuro(subTot)}
+                  </div>
+                </div>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                >
+                  {vociCat.map(({ v, i }) => (
+                    <VoceRow
+                      key={v.id}
+                      v={v}
+                      onChange={(ch) => updateVoce(i, ch)}
+                      onRemove={() => removeVoce(i)}
+                    />
                   ))}
-                </Select>
+                </div>
               </div>
-              <VoceRow
-                v={v}
-                onChange={(ch) => updateVoce(i, ch)}
-                onRemove={() => removeVoce(i)}
-              />
-            </div>
-          ))}
-        </div>
+            );
+          })}
 
-        <div className="flex items-center justify-between mt-3">
-          <Btn
-            type="button"
-            variant="ghost"
-            onClick={addVoce}
-            className="text-xs"
-          >
-            ＋ Aggiungi voce
-          </Btn>
-          {form.voci?.length > 0 && (
+          {(form.voci || []).length === 0 && !showUpload && (
             <div
-              className="font-700 text-base"
-              style={{ color: "var(--c-text)" }}
+              style={{
+                textAlign: "center",
+                padding: "20px 0",
+                fontSize: 13,
+                color: "var(--c-text-muted)",
+              }}
             >
-              Totale: {formatEuro(totale)}
+              Carica un preventivo o aggiungi voci manualmente
+            </div>
+          )}
+
+          {/* Totale */}
+          {(form.voci || []).length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                alignItems: "center",
+                paddingTop: 8,
+                borderTop: "1px solid var(--c-border)",
+                gap: 8,
+              }}
+            >
+              <span style={{ fontSize: 13, color: "var(--c-text-muted)" }}>
+                Totale preventivo
+              </span>
+              <span
+                style={{
+                  fontSize: 20,
+                  fontWeight: 700,
+                  fontFamily: "DM Serif Display, serif",
+                  color: "var(--c-text)",
+                }}
+              >
+                {formatEuro(totale)}
+              </span>
             </div>
           )}
         </div>
@@ -294,6 +648,7 @@ function LavoroForm({ init = {}, immobili, onSave, onClose }) {
   );
 }
 
+/* ── Main ── */
 export default function Lavori({ data, addItem, removeItem, updateItem }) {
   const [modal, setModal] = useState(null);
   const [filtroStato, setFiltroStato] = useState("tutti");
@@ -301,6 +656,9 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
 
   const immobili = data.immobili || [];
   const lavori = data.lavori || [];
+
+  // Tutti gli immobili selezionabili (palazzine + unità)
+  const tuttiImmobili = immobili;
 
   const filtered = useMemo(
     () =>
@@ -310,14 +668,19 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
     [lavori, filtroStato],
   );
 
-  const nomeImm = (id) => immobili.find((i) => i.id === id)?.nome || "—";
+  const nomeImm = (id) => {
+    const i = immobili.find((x) => x.id === id);
+    if (!i) return "—";
+    return (
+      (i._tipo === "palazzina" ? "🏢 " : "") + (i.nome || i.indirizzo || "—")
+    );
+  };
 
   const totaleLavoro = (l) =>
     (l.voci || []).reduce(
       (a, v) => a + Number(v.quantita || 0) * Number(v.prezzoUnitario || 0),
       0,
     );
-
   const totaleGlobale = lavori.reduce((a, l) => a + totaleLavoro(l), 0);
   const inCorso = lavori.filter((l) => l.stato === "in_corso").length;
   const pianificati = lavori.filter((l) => l.stato === "pianificato").length;
@@ -326,16 +689,28 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 24,
+        }}
+      >
         <div>
-          <h1 className="serif text-3xl">Lavori & Computi</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--c-text-muted)" }}>
-            Ristrutturazioni e computi metrici
+          <h1 className="serif" style={{ fontSize: 32 }}>
+            Lavori & Computi
+          </h1>
+          <p
+            style={{ fontSize: 13, color: "var(--c-text-muted)", marginTop: 4 }}
+          >
+            Ristrutturazioni, computi metrici e preventivi
           </p>
         </div>
         <Btn onClick={() => setModal("new")}>＋ Nuovo lavoro</Btn>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <StatCard
           label="Valore totale lavori"
@@ -346,19 +721,26 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
         <StatCard label="Pianificati" value={pianificati} sub="da avviare" />
       </div>
 
-      {/* Filtri */}
-      <div className="flex gap-2 mb-5 flex-wrap">
+      {/* Filtri stato */}
+      <div
+        style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}
+      >
         {[{ value: "tutti", label: "Tutti" }, ...STATI].map((s) => (
           <button
             key={s.value}
             onClick={() => setFiltroStato(s.value)}
-            className="px-3 py-1.5 rounded-lg text-sm font-500 cursor-pointer"
             style={{
+              padding: "6px 14px",
+              borderRadius: 20,
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: "pointer",
+              border: "1px solid var(--c-border)",
+              fontFamily: "inherit",
               background:
                 filtroStato === s.value ? "var(--c-text)" : "var(--c-surface)",
               color:
                 filtroStato === s.value ? "var(--c-bg)" : "var(--c-text-muted)",
-              border: "1px solid var(--c-border)",
             }}
           >
             {s.label}
@@ -368,24 +750,24 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
 
       {filtered.length === 0 ? (
         <EmptyState
-          icon={<Hammer/>}
+          icon="🔨"
           title="Nessun lavoro"
-          description="Aggiungi ristrutturazioni e computi metrici per tracciare i costi dei lavori."
-          action={<Btn onClick={() => setModal("new")}>Aggiungi lavoro</Btn>}
+          description="Aggiungi ristrutturazioni e carica direttamente i preventivi delle imprese."
+          action={<Btn onClick={() => setModal("new")}>＋ Aggiungi lavoro</Btn>}
         />
       ) : (
-        <div className="flex flex-col gap-4">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {filtered.map((l) => {
             const stato = statoInfo(l.stato);
             const totale = totaleLavoro(l);
-            const materiali = (l.voci || [])
+            const mat = (l.voci || [])
               .filter((v) => v.categoria === "materiali")
               .reduce(
                 (a, v) =>
                   a + Number(v.quantita || 0) * Number(v.prezzoUnitario || 0),
                 0,
               );
-            const manodopera = (l.voci || [])
+            const man = (l.voci || [])
               .filter((v) => v.categoria === "manodopera")
               .reduce(
                 (a, v) =>
@@ -394,21 +776,45 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
               );
             return (
               <Card key={l.id}>
-                <div className="flex items-start gap-4">
+                <div
+                  style={{ display: "flex", alignItems: "flex-start", gap: 14 }}
+                >
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
-                    style={{ background: "var(--c-yellow-soft)" }}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 12,
+                      background: "var(--c-yellow-soft)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 20,
+                      flexShrink: 0,
+                    }}
                   >
-                    <Hammer/>
+                    🔨
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-600 text-base">{l.titolo}</span>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <span style={{ fontWeight: 600, fontSize: 15 }}>
+                        {l.titolo}
+                      </span>
                       <Badge color={stato.color}>{stato.label}</Badge>
                     </div>
                     <div
-                      className="text-xs mt-1"
-                      style={{ color: "var(--c-text-muted)" }}
+                      style={{
+                        fontSize: 12,
+                        color: "var(--c-text-muted)",
+                        marginTop: 3,
+                      }}
                     >
                       {nomeImm(l.immobileId)}
                       {l.dataInizio && ` · ${formatDate(l.dataInizio)}`}
@@ -416,88 +822,140 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
                     </div>
                     {l.note && (
                       <div
-                        className="text-sm mt-1"
-                        style={{ color: "var(--c-text-muted)" }}
+                        style={{
+                          fontSize: 13,
+                          color: "var(--c-text-muted)",
+                          marginTop: 4,
+                        }}
                       >
                         {l.note}
                       </div>
                     )}
+
+                    {/* Subtotali categoria */}
                     {(l.voci || []).length > 0 && (
-                      <div className="flex gap-3 mt-3 flex-wrap">
-                        {materiali > 0 && (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          marginTop: 10,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {mat > 0 && (
                           <div
-                            className="rounded-lg px-3 py-1.5 text-xs font-500"
                             style={{
+                              padding: "4px 10px",
+                              borderRadius: 8,
                               background: "var(--c-blue-soft)",
                               color: "var(--c-blue)",
+                              fontSize: 11,
+                              fontWeight: 600,
                             }}
                           >
-                            🧱 Materiali: {formatEuro(materiali)}
+                            🧱 {formatEuro(mat)}
                           </div>
                         )}
-                        {manodopera > 0 && (
+                        {man > 0 && (
                           <div
-                            className="rounded-lg px-3 py-1.5 text-xs font-500"
                             style={{
+                              padding: "4px 10px",
+                              borderRadius: 8,
                               background: "var(--c-yellow-soft)",
                               color: "var(--c-yellow)",
+                              fontSize: 11,
+                              fontWeight: 600,
                             }}
                           >
-                            👷 Manodopera: {formatEuro(manodopera)}
+                            👷 {formatEuro(man)}
                           </div>
                         )}
-                        {totale - materiali - manodopera > 0.01 && (
+                        {totale - mat - man > 0.01 && (
                           <div
-                            className="rounded-lg px-3 py-1.5 text-xs font-500"
                             style={{
+                              padding: "4px 10px",
+                              borderRadius: 8,
                               background: "var(--c-surface-alt)",
                               color: "var(--c-text-muted)",
+                              fontSize: 11,
+                              fontWeight: 600,
                             }}
                           >
-                            Altro: {formatEuro(totale - materiali - manodopera)}
+                            {formatEuro(totale - mat - man)}
                           </div>
                         )}
                       </div>
                     )}
-                    {/* Voci computo */}
+
+                    {/* Voci collassabili */}
                     {(l.voci || []).length > 0 && (
-                      <details className="mt-3">
+                      <details style={{ marginTop: 10 }}>
                         <summary
-                          className="text-xs cursor-pointer font-500"
-                          style={{ color: "var(--c-text-muted)" }}
+                          style={{
+                            fontSize: 12,
+                            cursor: "pointer",
+                            fontWeight: 500,
+                            color: "var(--c-text-muted)",
+                          }}
                         >
-                          {l.voci.length} voci nel computo metrico
+                          {l.voci.length} voci nel computo
                         </summary>
-                        <div className="mt-2 flex flex-col gap-1.5">
+                        <div
+                          style={{
+                            marginTop: 8,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 4,
+                          }}
+                        >
                           <div
-                            className="grid text-xs font-600 uppercase tracking-wider px-3 py-1"
                             style={{
-                              gridTemplateColumns: "2fr 60px 70px 80px 80px",
+                              display: "grid",
+                              fontSize: 10,
+                              fontWeight: 600,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.08em",
                               color: "var(--c-text-muted)",
+                              padding: "2px 12px",
+                              gridTemplateColumns: "2fr 60px 70px 80px 80px",
                             }}
                           >
                             <span>Descrizione</span>
                             <span>U.M.</span>
                             <span>Qtà</span>
                             <span>€/U.M.</span>
-                            <span className="text-right">Totale</span>
+                            <span style={{ textAlign: "right" }}>Totale</span>
                           </div>
                           {l.voci.map((v) => (
                             <div
                               key={v.id}
-                              className="grid items-center text-sm rounded-lg px-3 py-2"
                               style={{
-                                gridTemplateColumns: "2fr 60px 70px 80px 80px",
+                                display: "grid",
+                                alignItems: "center",
+                                fontSize: 12,
+                                padding: "7px 12px",
+                                borderRadius: 8,
                                 background: "var(--c-surface-alt)",
+                                gridTemplateColumns: "2fr 60px 70px 80px 80px",
                               }}
                             >
-                              <span className="truncate">{v.descrizione}</span>
+                              <span
+                                style={{
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {v.descrizione}
+                              </span>
                               <span style={{ color: "var(--c-text-muted)" }}>
                                 {v.um}
                               </span>
                               <span>{v.quantita}</span>
                               <span>{formatEuro(v.prezzoUnitario)}</span>
-                              <span className="text-right font-600">
+                              <span
+                                style={{ textAlign: "right", fontWeight: 700 }}
+                              >
                                 {formatEuro(
                                   Number(v.quantita || 0) *
                                     Number(v.prezzoUnitario || 0),
@@ -509,34 +967,33 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
                       </details>
                     )}
                   </div>
-                  <div className="text-right shrink-0">
+
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
                     <div
-                      className="font-700 text-xl"
-                      style={{ color: "var(--c-yellow)" }}
+                      className="serif"
+                      style={{ fontSize: 22, color: "var(--c-yellow)" }}
                     >
                       {formatEuro(totale)}
                     </div>
-                    <div
-                      className="text-xs"
-                      style={{ color: "var(--c-text-muted)" }}
-                    >
+                    <div style={{ fontSize: 11, color: "var(--c-text-muted)" }}>
                       {(l.voci || []).length} voci
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
+
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                     <Btn
                       variant="ghost"
                       className="text-xs px-2"
                       onClick={() => setModal({ edit: l })}
                     >
-                      <Pencil/>
+                      ✏️
                     </Btn>
                     <Btn
                       variant="danger"
                       className="text-xs px-2"
                       onClick={() => ask(() => removeItem("lavori", l.id))}
                     >
-                      <Trash2 />
+                      🗑
                     </Btn>
                   </div>
                 </div>
@@ -553,7 +1010,7 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
           wide
         >
           <LavoroForm
-            immobili={immobili}
+            immobili={tuttiImmobili}
             onSave={(f) => {
               addItem("lavori", f);
               setModal(null);
@@ -566,7 +1023,7 @@ export default function Lavori({ data, addItem, removeItem, updateItem }) {
         <Modal title="Modifica lavoro" onClose={() => setModal(null)} wide>
           <LavoroForm
             init={modal.edit}
-            immobili={immobili}
+            immobili={tuttiImmobili}
             onSave={(f) => {
               updateItem("lavori", modal.edit.id, f);
               setModal(null);

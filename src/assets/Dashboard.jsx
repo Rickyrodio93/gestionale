@@ -56,7 +56,7 @@ export default function Dashboard({ data }) {
     <div className="flex flex-col gap-8">
       <div>
         <h1 className="serif text-4xl mb-1">Buongiorno 👋</h1>
-        <p className="text-sm" style={{ color: "var(--c-text-muted)" }}>
+        <p className="text-sm text-(--c-text-muted)">
           {new Date().toLocaleDateString("it-IT", {
             weekday: "long",
             day: "numeric",
@@ -70,8 +70,7 @@ export default function Dashboard({ data }) {
 
       {/* KPIs */}
       <div
-        className="grid grid-cols-2 gap-4"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}
+        className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]"
       >
         <StatCard
           label="Rendite totali"

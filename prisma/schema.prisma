@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum TipoUnita {
+  APPARTAMENTO
+  VILLA
+  LAVANDERIA
+  CANTINA
+  ALTRO
+}
+
+enum TipoInquilino {
+  PERSONA
+  SOCIETA
+}
+
+enum TipoContratto {
+  LUNGO
+  BREVE
+}
+
+enum TipoBolletta {
+  ACQUA
+  LUCE
+  GAS
+  ALTRO
+}
+
+enum MetodoRiparto {
+  PERSONE
+  CONSUMO
+  EQUO
+}
+
+enum TipoValore {
+  CATASTALE
+  MERCATO
+  PERIZIA
+  OMI
+  ACQUISTO
+  VENDITA
+}
+
+enum ModalitaContratto {
+  QUATTRO_PIU_QUATTRO
+  CONCORDATO_3_2
+  TRANSITORIO
+  ALTRO
+}
+
+enum Canale {
+  AIRBNB
+  BOOKING
+  DIRETTA
+  ALTRO
+}
+
+enum StatoPrenotazione {
+  CONFERMATA
+  ANNULLATA
+}
+
+model Palazzina {
+  id        Int         @id @default(autoincrement())
+  nome      String
+  indirizzo String?
+  unita     Unita[]
+  contatori Contatore[]
+  bollette  Bolletta[]
+}
+
+model ValoreImmobile {
+  id      Int        @id @default(autoincrement())
+  unita   Unita      @relation(fields: [unitaId], references: [id], onDelete: Cascade)
+  unitaId Int
+  data    DateTime
+  tipo    TipoValore
+  importo Float
+  fonte   String? // es. "agenzia X", "perizia geom. Y", "OMI 2° sem. 2026"
+  note    String?
+}
+
+model Unita {
+  id             Int              @id @default(autoincrement())
+  palazzina      Palazzina?       @relation(fields: [palazzinaId], references: [id])
+  palazzinaId    Int? // nullo = unità autonoma
+  nome           String
+  piano          String?
+  interno        String?
+  indirizzo      String? // obbligatorio se autonoma
+  comune         String?
+  tipo           TipoUnita        @default(APPARTAMENTO)
+  catasto        DatiCatastali?
+  contatori      Contatore[]
+  contratti      Contratto[]
+  dataAcquisto   DateTime?
+  prezzoAcquisto Float?
+  dataVendita    DateTime? // se valorizzata, l'unità esce dal portafoglio attivo
+  prezzoVendita  Float?
+  valori         ValoreImmobile[]
+  affittoBreve   Boolean          @default(false)
+  gestore        String? // es. nome dell'agenzia
+  icalUrl        String? // link calendario (Airbnb o principale dell'agenzia)
+  cin            String? // codice identificativo nazionale, se previsto
+  prenotazioni   Prenotazione[]
+  incassi        Incasso[]
+}
+
+model DatiCatastali {
+  id            Int     @id @default(autoincrement())
+  unita         Unita   @relation(fields: [unitaId], references: [id], onDelete: Cascade)
+  unitaId       Int     @unique
+  codiceComune  String // codice catastale, es. F205
+  sezione       String?
+  foglio        String
+  particella    String
+  subalterno    String
+  zonaCensuaria String?
+  categoria     String // es. A/2
+  classe        String
+  consistenza   Float // vani o mq
+  superficie    Float? // mq catastali
+  rendita       Float // rendita catastale €
+  quotaPossesso Float   @default(100)
+  aliquotaImu   Float? // ‰ del comune, es. 10.6
+}
+
+model Inquilino {
+  id        Int           @id @default(autoincrement())
+  nome      String
+  tipo      TipoInquilino @default(PERSONA)
+  email     String?
+  telefono  String?
+  cfPiva    String?
+  contratti Contratto[]
+}
+
+model Contratto {
+  id                Int                @id @default(autoincrement())
+  unita             Unita              @relation(fields: [unitaId], references: [id])
+  unitaId           Int
+  inquilino         Inquilino          @relation(fields: [inquilinoId], references: [id])
+  inquilinoId       Int
+  tipo              TipoContratto      @default(LUNGO)
+  modalita          ModalitaContratto? // solo per i lunghi
+  dataInizio        DateTime
+  dataFine          DateTime? // scadenza corrente
+  durataMesi        Int? // es. 48
+  rinnovoMesi       Int? // es. 48
+  preavvisoMesi     Int                @default(6)
+  rinnovi           Int                @default(0)
+  disdettaInviataIl DateTime? // data invio comunicazione
+  disdettaNote      String? // motivo, raccomandata/PEC, ecc.
+  canone            Float?
+  persone           Int?
+  cedolare          Boolean            @default(false)
+  quote             Quota[]
+}
+
+// Contatore generale della palazzina (unitaId nullo) o divisionale di un'unità
+model Contatore {
+  id          Int          @id @default(autoincrement())
+  palazzina   Palazzina    @relation(fields: [palazzinaId], references: [id])
+  palazzinaId Int
+  unita       Unita?       @relation(fields: [unitaId], references: [id])
+  unitaId     Int?
+  numero      String?
+  tipo        TipoBolletta @default(ACQUA)
+  letture     Lettura[]
+}
+
+model Lettura {
+  id          Int       @id @default(autoincrement())
+  contatore   Contatore @relation(fields: [contatoreId], references: [id])
+  contatoreId Int
+  data        DateTime
+  valore      Float
+  stimata     Boolean   @default(false)
+}
+
+model Bolletta {
+  id          Int           @id @default(autoincrement())
+  palazzina   Palazzina     @relation(fields: [palazzinaId], references: [id])
+  palazzinaId Int
+  tipo        TipoBolletta  @default(ACQUA)
+  numero      String?
+  fornitore   String?
+  dal         DateTime
+  al          DateTime
+  importo     Float
+  metodo      MetodoRiparto @default(CONSUMO)
+  quote       Quota[]
+}
+
+// Quota di una bolletta a carico di un contratto
+model Quota {
+  id          Int         @id @default(autoincrement())
+  bolletta    Bolletta    @relation(fields: [bollettaId], references: [id], onDelete: Cascade)
+  bollettaId  Int
+  contratto   Contratto   @relation(fields: [contrattoId], references: [id])
+  contrattoId Int
+  percentuale Float?
+  importo     Float
+  pagamenti   Pagamento[]
+}
+
+model Pagamento {
+  id      Int      @id @default(autoincrement())
+  quota   Quota    @relation(fields: [quotaId], references: [id], onDelete: Cascade)
+  quotaId Int
+  data    DateTime
+  importo Float
+}
+
+model Prenotazione {
+  id                 Int               @id @default(autoincrement())
+  unita              Unita             @relation(fields: [unitaId], references: [id])
+  unitaId            Int
+  canale             Canale            @default(ALTRO)
+  uidEsterno         String? // id evento iCal, evita duplicati alla risincronizzazione
+  ospite             String?
+  checkIn            DateTime
+  checkOut           DateTime
+  stato              StatoPrenotazione @default(CONFERMATA)
+  lordo              Float?
+  commissioneOta     Float?
+  commissioneGestore Float?
+  pulizie            Float?
+  ritenuta           Float?
+  nettoAccreditato   Float?
+  dataAccredito      DateTime?
+  origine            String            @default("manuale") // manuale | ical | rendiconto
+  note               String?
+
+  @@unique([unitaId, canale, uidEsterno])
+}
+
+model Incasso {
+  id      Int      @id @default(autoincrement())
+  unita   Unita    @relation(fields: [unitaId], references: [id])
+  unitaId Int
+  data    DateTime // data di accredito
+  mese    String // mese di competenza, es. "2026-10"
+  importo Float // netto accreditato
+  note    String?
+}

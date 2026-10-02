@@ -1,4 +1,6 @@
+"use client"
 import { ChevronFirst, ChevronLast, MoreVertical } from "lucide-react";
+import Image from "next/image";
 import { createContext, useContext, useState } from "react";
 
 const SidebarContext = createContext();
@@ -27,11 +29,7 @@ export default function Sidebar({ children }) {
         </SidebarContext.Provider>
 
         <div className="border-t border-gray-200 flex p-3">
-          <img
-            src="https://ui-avatars.com/api/?name=Riccardo+Rodio&background=c7d2fe&color=3730a3&bold=true"
-            alt=""
-            className="w-10 h-10 rounded-md"
-          />
+          
           <div
             className={`
                 flex justify-between items-center 

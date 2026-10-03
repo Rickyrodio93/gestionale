@@ -123,7 +123,7 @@ export default async function Entrate({ searchParams }) {
                       )}
                     </td>
                     <td className="pl-2 text-right">
-                      <Link href={`/entrate/contatti/${c.id}/modifica`} className="inline-flex p-1.5 text-gray-500 hover:bg-gray-100" title="Modifica">
+                      <Link href={`/entrate/contratti/${c.id}/modifica`} className="inline-flex p-1.5 text-gray-500 hover:bg-gray-100" title="Modifica">
                         <Pencil size={16} />
                       </Link>
                     </td>

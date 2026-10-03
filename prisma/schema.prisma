@@ -33,6 +33,7 @@ enum TipoBolletta {
 }
 
 enum MetodoRiparto {
+  A_CARICO
   PERSONE
   CONSUMO
   EQUO
@@ -66,6 +67,15 @@ enum StatoPrenotazione {
   ANNULLATA
 }
 
+enum CategoriaSpesa {
+  IMU
+  CEDOLARE
+  CONDOMINIO
+  ORDINARIA
+  STRAORDINARIA
+  ALTRO
+}
+
 model Palazzina {
   id        Int         @id @default(autoincrement())
   nome      String
@@ -73,6 +83,7 @@ model Palazzina {
   unita     Unita[]
   contatori Contatore[]
   bollette  Bolletta[]
+  spesas    Spesa[]
 }
 
 model ValoreImmobile {
@@ -110,6 +121,8 @@ model Unita {
   cin            String? // codice identificativo nazionale, se previsto
   prenotazioni   Prenotazione[]
   incassi        Incasso[]
+  spese          Spesa[]
+  bollette       Bolletta[]
 }
 
 model DatiCatastali {
@@ -185,29 +198,39 @@ model Lettura {
 }
 
 model Bolletta {
-  id          Int           @id @default(autoincrement())
-  palazzina   Palazzina     @relation(fields: [palazzinaId], references: [id])
-  palazzinaId Int
-  tipo        TipoBolletta  @default(ACQUA)
-  numero      String?
-  fornitore   String?
-  dal         DateTime
-  al          DateTime
-  importo     Float
-  metodo      MetodoRiparto @default(CONSUMO)
-  quote       Quota[]
+  id                 Int           @id @default(autoincrement())
+  palazzina          Palazzina?    @relation(fields: [palazzinaId], references: [id])
+  palazzinaId        Int?
+  unita              Unita?        @relation(fields: [unitaId], references: [id])
+  unitaId            Int?
+  tipo               TipoBolletta  @default(ACQUA)
+  numero             String?
+  fornitore          String?
+  dal                DateTime
+  al                 DateTime
+  importo            Float
+  metodo             MetodoRiparto @default(A_CARICO)
+  dataPagamento      DateTime? // quando l'hai pagata al fornitore
+  letturaGenIniziale Float?
+  letturaGenFinale   Float?
+  note               String?
+  quote              Quota[]
 }
 
 // Quota di una bolletta a carico di un contratto
 model Quota {
-  id          Int         @id @default(autoincrement())
-  bolletta    Bolletta    @relation(fields: [bollettaId], references: [id], onDelete: Cascade)
-  bollettaId  Int
-  contratto   Contratto   @relation(fields: [contrattoId], references: [id])
-  contrattoId Int
-  percentuale Float?
-  importo     Float
-  pagamenti   Pagamento[]
+  id              Int         @id @default(autoincrement())
+  bolletta        Bolletta    @relation(fields: [bollettaId], references: [id], onDelete: Cascade)
+  bollettaId      Int
+  contratto       Contratto   @relation(fields: [contrattoId], references: [id])
+  contrattoId     Int
+  percentuale     Float?
+  importo         Float
+  pagamenti       Pagamento[]
+  persone         Int?
+  letturaIniziale Float?
+  letturaFinale   Float?
+  consumo         Float?
 }
 
 model Pagamento {
@@ -249,4 +272,19 @@ model Incasso {
   mese    String // mese di competenza, es. "2026-10"
   importo Float // netto accreditato
   note    String?
+}
+
+model Spesa {
+  id          Int            @id @default(autoincrement())
+  categoria   CategoriaSpesa
+  descrizione String?
+  importo     Float
+  data        DateTime // data di pagamento
+  anno        Int // anno di competenza (l'IMU 2026 pagata a dicembre 2026, la cedolare 2026 pagata nel 2027)
+  fornitore   String?
+  note        String?
+  unita       Unita?         @relation(fields: [unitaId], references: [id])
+  unitaId     Int?
+  palazzina   Palazzina?     @relation(fields: [palazzinaId], references: [id])
+  palazzinaId Int?
 }

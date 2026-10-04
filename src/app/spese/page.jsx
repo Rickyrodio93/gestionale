@@ -6,6 +6,7 @@ import { eur, dataIt } from "@/lib/format";
 import { CATEGORIE } from "@/lib/spese";
 import BottoneElimina from "@/components/BottoneElimina";
 import { eliminaSpesa } from "./actions";
+import { sincronizzaRicorrenti } from "@/lib/ricorrenti";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ const somma = (arr) => arr.reduce((t, s) => t + s.importo, 0);
 
 export default async function Spese({ searchParams }) {
   const sp = await searchParams;
+  await sincronizzaRicorrenti();
 
   const tutte = await prisma.spesa.findMany({
     include: { unita: { include: { palazzina: true } }, palazzina: true },
@@ -73,6 +75,12 @@ export default async function Spese({ searchParams }) {
             className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50"
           >
             Bollette
+          </Link>
+          <Link
+            href="/spese/ricorrenti"
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50"
+          >
+            Ricorrenti
           </Link>
           <Link
             href="/spese/nuova"
@@ -202,6 +210,14 @@ export default async function Spese({ searchParams }) {
                     </td>
                     <td className="pr-4 text-gray-600">
                       {s.descrizione}
+                      {s.ricorrenteId && (
+                        <span
+                          className="ml-1 text-xs text-indigo-600"
+                          title="Spesa ricorrente"
+                        >
+                          ↻
+                        </span>
+                      )}
                       {s.fornitore && (
                         <div className="text-xs text-gray-500">
                           {s.fornitore}

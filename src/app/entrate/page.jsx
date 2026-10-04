@@ -5,6 +5,8 @@ import { statoScadenza, coloriScadenza } from "@/lib/scadenze";
 import { eur, dataIt } from "@/lib/format";
 import BottoneElimina from "@/components/BottoneElimina";
 import { eliminaIncasso } from "./actions";
+import { etichetta } from "@/lib/scadenze";
+import { situazioneCanoni } from "@/lib/canoni";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +15,17 @@ export default async function Entrate({ searchParams }) {
 
   const contratti = await prisma.contratto.findMany({
     where: { tipo: "LUNGO" },
-    include: { inquilino: true, unita: { include: { palazzina: true } } },
+    include: {
+      inquilino: true,
+      canoni: true,
+      unita: { include: { palazzina: true } },
+    },
     orderBy: { dataFine: "asc" },
   });
-  const totaleCanoni = contratti.reduce((t, c) => t + (c.canone ?? 0), 0);
+
+  const totaleCanoni = contratti
+    .filter((c) => !(c.dataRilascio && c.dataRilascio <= new Date()))
+    .reduce((t, c) => t + (c.canone ?? 0), 0);
 
   const tutti = await prisma.incasso.findMany({
     include: { unita: true },
@@ -78,6 +87,7 @@ export default async function Entrate({ searchParams }) {
                 <th>Periodo</th>
                 <th className="text-right">Canone</th>
                 <th className="pl-4">Disdetta</th>
+                <th className="pl-4">Canoni</th>
                 <th />
               </tr>
             </thead>
@@ -114,7 +124,7 @@ export default async function Entrate({ searchParams }) {
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${coloriScadenza[s.livello]}`}
                         >
-                          entro {dataIt(s.limite)}
+                          {etichetta(s)}
                         </span>
                       ) : (
                         <span className="text-xs text-amber-600">
@@ -122,8 +132,28 @@ export default async function Entrate({ searchParams }) {
                         </span>
                       )}
                     </td>
+                    <td className="pl-4 text-xs">
+                      {c.canone == null ? (
+                        <span className="text-gray-400">—</span>
+                      ) : (
+                        (() => {
+                          const a = situazioneCanoni(c).arretrati;
+                          return a > 0 ? (
+                            <span className="font-medium text-red-700">
+                              arretrati {eur(a)}
+                            </span>
+                          ) : (
+                            <span className="text-green-700">in regola</span>
+                          );
+                        })()
+                      )}
+                    </td>
                     <td className="pl-2 text-right">
-                      <Link href={`/entrate/contratti/${c.id}/modifica`} className="inline-flex p-1.5 text-gray-500 hover:bg-gray-100" title="Modifica">
+                      <Link
+                        href={`/entrate/contratti/${c.id}/modifica`}
+                        className="inline-flex p-1.5 text-gray-500 hover:bg-gray-100"
+                        title="Modifica"
+                      >
                         <Pencil size={16} />
                       </Link>
                     </td>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus, Pencil } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { statoScadenza, coloriScadenza } from "@/lib/scadenze";
+import { statoScadenza, coloriScadenza, etichetta } from "@/lib/scadenze";
 import { dataIt } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 const includeUnita = {
   catasto: true,
   contratti: {
+    // where: {dataVendita: null},
     where: { tipo: "LUNGO" },
     include: { inquilino: true },
     orderBy: { dataInizio: "desc" },
@@ -17,7 +18,8 @@ const includeUnita = {
 };
 
 function Riga({ u }) {
-  const c = u.contratti[0];
+  const c0 = u.contratti[0];
+  const c = c0 && !(c0.dataRilascio && c0.dataRilascio <= new Date()) ? c0 : null; // rilasciato = libera
   const s = c && statoScadenza(c);
   return (
     <tr className="border-t border-gray-100 text-sm">
@@ -35,7 +37,7 @@ function Riga({ u }) {
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ${coloriScadenza[s.livello]}`}
           >
-            disdetta entro {dataIt(s.limite)}
+            {etichetta(s)}
           </span>
         ) : (
           "—"

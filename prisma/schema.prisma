@@ -76,37 +76,55 @@ enum CategoriaSpesa {
   ALTRO
 }
 
+enum Frequenza {
+  MENSILE
+  BIMESTRALE
+  TRIMESTRALE
+  SEMESTRALE
+  ANNUALE
+}
+
 model Palazzina {
-  id        Int         @id @default(autoincrement())
-  nome      String
-  indirizzo String?
-  unita     Unita[]
-  contatori Contatore[]
-  bollette  Bolletta[]
-  spesas    Spesa[]
+  id             Int               @id @default(autoincrement())
+  nome           String
+  indirizzo      String?
+  unita          Unita[]
+  contatori      Contatore[]
+  bollette       Bolletta[]
+  spesas         Spesa[]
+  ricorrenti     SpesaRicorrente[]
+  dataAcquisto   DateTime?
+  prezzoAcquisto Float?
+  costiAcquisto  Float?
+  dataVendita    DateTime?
+  prezzoVendita  Float?
+  costiVendita   Float?
+  valori         ValoreImmobile[]
 }
 
 model ValoreImmobile {
-  id      Int        @id @default(autoincrement())
-  unita   Unita      @relation(fields: [unitaId], references: [id], onDelete: Cascade)
-  unitaId Int
-  data    DateTime
-  tipo    TipoValore
-  importo Float
-  fonte   String? // es. "agenzia X", "perizia geom. Y", "OMI 2° sem. 2026"
-  note    String?
+  id          Int        @id @default(autoincrement())
+  unita       Unita?     @relation(fields: [unitaId], references: [id], onDelete: Cascade)
+  unitaId     Int?
+  data        DateTime
+  tipo        TipoValore
+  importo     Float
+  fonte       String? // es. "agenzia X", "perizia geom. Y", "OMI 2° sem. 2026"
+  note        String?
+  palazzina   Palazzina? @relation(fields: [palazzinaId], references: [id], onDelete: Cascade)
+  palazzinaId Int?
 }
 
 model Unita {
-  id             Int              @id @default(autoincrement())
-  palazzina      Palazzina?       @relation(fields: [palazzinaId], references: [id])
+  id             Int               @id @default(autoincrement())
+  palazzina      Palazzina?        @relation(fields: [palazzinaId], references: [id])
   palazzinaId    Int? // nullo = unità autonoma
   nome           String
   piano          String?
   interno        String?
   indirizzo      String? // obbligatorio se autonoma
   comune         String?
-  tipo           TipoUnita        @default(APPARTAMENTO)
+  tipo           TipoUnita         @default(APPARTAMENTO)
   catasto        DatiCatastali?
   contatori      Contatore[]
   contratti      Contratto[]
@@ -115,7 +133,7 @@ model Unita {
   dataVendita    DateTime? // se valorizzata, l'unità esce dal portafoglio attivo
   prezzoVendita  Float?
   valori         ValoreImmobile[]
-  affittoBreve   Boolean          @default(false)
+  affittoBreve   Boolean           @default(false)
   gestore        String? // es. nome dell'agenzia
   icalUrl        String? // link calendario (Airbnb o principale dell'agenzia)
   cin            String? // codice identificativo nazionale, se previsto
@@ -123,6 +141,9 @@ model Unita {
   incassi        Incasso[]
   spese          Spesa[]
   bollette       Bolletta[]
+  ricorrenti     SpesaRicorrente[]
+  costiAcquisto  Float?
+  costiVendita   Float?
 }
 
 model DatiCatastali {
@@ -174,6 +195,9 @@ model Contratto {
   persone           Int?
   cedolare          Boolean            @default(false)
   quote             Quota[]
+  inOccupazione     Boolean            @default(false)
+  dataRilascio      DateTime?
+  canoni            PagamentoCanone[]
 }
 
 // Contatore generale della palazzina (unitaId nullo) o divisionale di un'unità
@@ -275,16 +299,49 @@ model Incasso {
 }
 
 model Spesa {
-  id          Int            @id @default(autoincrement())
-  categoria   CategoriaSpesa
-  descrizione String?
+  id           Int              @id @default(autoincrement())
+  categoria    CategoriaSpesa
+  descrizione  String?
+  importo      Float
+  data         DateTime // data di pagamento
+  anno         Int // anno di competenza (l'IMU 2026 pagata a dicembre 2026, la cedolare 2026 pagata nel 2027)
+  fornitore    String?
+  note         String?
+  unita        Unita?           @relation(fields: [unitaId], references: [id])
+  unitaId      Int?
+  palazzina    Palazzina?       @relation(fields: [palazzinaId], references: [id])
+  palazzinaId  Int?
+  ricorrente   SpesaRicorrente? @relation(fields: [ricorrenteId], references: [id], onDelete: SetNull)
+  ricorrenteId Int?
+  periodo      String?
+
+  @@unique([ricorrenteId, periodo])
+}
+
+model PagamentoCanone {
+  id          Int       @id @default(autoincrement())
+  contratto   Contratto @relation(fields: [contrattoId], references: [id], onDelete: Cascade)
+  contrattoId Int
+  mese        String // competenza, es. "2026-10"
+  data        DateTime // data di incasso
   importo     Float
-  data        DateTime // data di pagamento
-  anno        Int // anno di competenza (l'IMU 2026 pagata a dicembre 2026, la cedolare 2026 pagata nel 2027)
-  fornitore   String?
   note        String?
-  unita       Unita?         @relation(fields: [unitaId], references: [id])
-  unitaId     Int?
-  palazzina   Palazzina?     @relation(fields: [palazzinaId], references: [id])
-  palazzinaId Int?
+}
+
+model SpesaRicorrente {
+  id                Int            @id @default(autoincrement())
+  categoria         CategoriaSpesa
+  descrizione       String
+  importo           Float
+  frequenza         Frequenza      @default(MENSILE)
+  dal               DateTime
+  al                DateTime?
+  fornitore         String?
+  note              String?
+  unita             Unita?         @relation(fields: [unitaId], references: [id])
+  unitaId           Int?
+  palazzina         Palazzina?     @relation(fields: [palazzinaId], references: [id])
+  palazzinaId       Int?
+  ultimaGenerazione DateTime?
+  spese             Spesa[]
 }

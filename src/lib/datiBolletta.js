@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { fineEffettiva } from "./scadenze";
 
 const d10 = (d) => (d ? d.toISOString().slice(0, 10) : null);
 
@@ -30,7 +31,7 @@ export async function datiForm(escludiId = null) {
         inquilino: c.inquilino.nome,
         persone: c.persone,
         inizio: d10(c.dataInizio),
-        fine: d10(c.dataFine),
+        fine: d10(fineEffettiva(c)),
     }));
 
     // ultima lettura finale per unità e tipo, e per contatore generale della palazzina

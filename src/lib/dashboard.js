@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { totaliBolletta } from "@/lib/bollette";
+import { situazioneCanoni } from "@/lib/canoni";
+import { sincronizzaRicorrenti } from "@/lib/ricorrenti";
+import { dataAcq } from "./investimento";
 
 const GIORNO = 86400000;
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -20,50 +23,43 @@ export const CAT_ENTRATE = { LUNGHI: "Affitti lunghi", BREVI: "Affitti brevi" };
 const chiaveDi = (unita, palazzina) =>
     palazzina?.nome ?? unita?.palazzina?.nome ?? unita?.nome ?? "Altro";
 
+const rif = (unita, palazzina) => ({
+    chiave: chiaveDi(unita, palazzina),
+    unitaId: unita?.id ?? null,
+    palazzinaId: palazzina?.id ?? unita?.palazzinaId ?? null,
+});
 // Elenco unico di movimenti: { data, tipo: "entrata"|"uscita", cat, importo, chiave }
 export async function caricaMovimenti() {
-    const oggi = new Date();
+    await sincronizzaRicorrenti();
     const movs = [];
 
-    // canoni di competenza dei contratti lunghi
     const contratti = await prisma.contratto.findMany({
-        where: { tipo: "LUNGO", canone: { not: null } },
-        include: { unita: { include: { palazzina: true } } },
+        where: { tipo: "LUNGO" },
+        include: { canoni: true, unita: { include: { palazzina: true } } },
     });
+    let arretrati = 0;
     for (const c of contratti) {
-        const ini = c.dataInizio.getTime();
-        const fine = c.dataFine ? c.dataFine.getTime() : Date.UTC(9999, 0, 1);
-        let y = c.dataInizio.getUTCFullYear();
-        let m = c.dataInizio.getUTCMonth();
-        while (true) {
-            const start = Date.UTC(y, m, 1);
-            if (start > oggi.getTime() || start > fine) break;
-            const end = Date.UTC(y, m + 1, 0);
-            const giorniMese = Math.round((end - start) / GIORNO) + 1;
-            const da = Math.max(start, ini);
-            const a = Math.min(end, fine);
-            if (a >= da) {
-                const f = Math.min((Math.round((a - da) / GIORNO) + 1) / giorniMese, 1);
-                movs.push({ data: new Date(start), tipo: "entrata", cat: "LUNGHI", importo: r2(c.canone * f), chiave: chiaveDi(c.unita) });
-            }
-            m++;
-            if (m > 11) { m = 0; y++; }
+        const acq = dataAcq(c.unita);
+        for (const p of c.canoni) {
+            if (acq && p.data < acq) continue;
+            movs.push({ data: p.data, tipo: "entrata", cat: "LUNGHI", importo: p.importo, ...rif(c.unita) });
         }
+        arretrati += situazioneCanoni(c).arretrati;
     }
 
-    // incassi affitti brevi
     const incassi = await prisma.incasso.findMany({ include: { unita: { include: { palazzina: true } } } });
-    for (const i of incassi)
-        movs.push({ data: i.data, tipo: "entrata", cat: "BREVI", importo: i.importo, chiave: chiaveDi(i.unita) });
+    for (const i of incassi) {
+        const acq = dataAcq(i.unita);
+        if (acq && i.data < acq) continue;
+        movs.push({ data: i.data, tipo: "entrata", cat: "BREVI", importo: i.importo, ...rif(i.unita) });
+    }
 
-    // spese
     const spese = await prisma.spesa.findMany({
         include: { palazzina: true, unita: { include: { palazzina: true } } },
     });
     for (const s of spese)
-        movs.push({ data: s.data, tipo: "uscita", cat: s.categoria, importo: s.importo, chiave: chiaveDi(s.unita, s.palazzina) });
+        movs.push({ data: s.data, tipo: "uscita", cat: s.categoria, importo: s.importo, ...rif(s.unita, s.palazzina) });
 
-    // bollette: solo la parte a mio carico; il resto è un credito verso gli inquilini
     const bollette = await prisma.bolletta.findMany({
         include: { palazzina: true, unita: { include: { palazzina: true } }, quote: { include: { pagamenti: true } } },
     });
@@ -72,16 +68,10 @@ export async function caricaMovimenti() {
         const t = totaliBolletta(b);
         crediti += t.daIncassare;
         if (t.aCarico > 0.005)
-            movs.push({
-                data: b.dataPagamento ?? b.al,
-                tipo: "uscita",
-                cat: "BOLLETTE",
-                importo: t.aCarico,
-                chiave: chiaveDi(b.unita, b.palazzina),
-            });
+            movs.push({ data: b.dataPagamento ?? b.al, tipo: "uscita", cat: "BOLLETTE", importo: t.aCarico, ...rif(b.unita, b.palazzina) });
     }
 
-    return { movs, crediti: r2(crediti) };
+    return { movs, crediti: r2(crediti), arretrati: r2(arretrati) };
 }
 
 // 12 mesi di un anno; i mesi oltre `fino` restano vuoti (anno in corso)

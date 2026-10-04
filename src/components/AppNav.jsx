@@ -6,6 +6,7 @@ import {
   Receipt,
   Wallet,
   CalendarDays,
+  Landmark,
 } from "lucide-react";
 import Sidebar, { SidebarItem } from "./Sidebar";
 
@@ -14,6 +15,7 @@ const items = [
   { href: "/appartamenti", text: "Appartamenti", icon: Building2 },
   { href: "/spese", text: "Spese", icon: Receipt },
   { href: "/entrate", text: "Entrate", icon: Wallet },
+  { href: "/investimenti", text: "Investimenti", icon: Landmark },
   { href: "/calendario", text: "Calendario", icon: CalendarDays },
 ];
 

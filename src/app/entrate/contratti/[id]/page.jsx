@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Pencil, RefreshCw, Trash2, Check } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { statoScadenza, coloriScadenza, rinnovaFine } from "@/lib/scadenze";
 import { eur, dataIt } from "@/lib/format";
@@ -12,6 +12,19 @@ import {
   rinnovaContratto,
   eliminaContratto,
 } from "@/app/entrate/actions";
+import { situazioneCanoni, STATI_CANONE } from "@/lib/canoni";
+import BottoneElimina from "@/components/BottoneElimina";
+import {
+  segnaOccupazione,
+  annullaOccupazione,
+  segnaRilascio,
+  annullaRilascio,
+  registraCanone,
+  aggiornaCanone,
+  eliminaCanone,
+  incassaMesiMancanti,
+} from "@/app/entrate/actions";
+import { dataAcq } from "@/lib/investimento";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +35,8 @@ const testo = {
   termine_superato: "Il preavviso non è più rispettabile per questa scadenza",
   scaduto: "Contratto scaduto",
   disdetta_inviata: "Disdetta inviata",
+  in_occupazione: "Contratto scaduto: l'inquilino occupa ancora l'immobile",
+  concluso: "Contratto concluso: immobile rilasciato",
 };
 
 const giorni = (n) => (n >= 0 ? `tra ${n} giorni` : `${Math.abs(n)} giorni fa`);
@@ -47,13 +62,29 @@ export default async function Scheda({ params }) {
   const cid = Number(id);
   const c = await prisma.contratto.findUnique({
     where: { id: cid },
-    include: { inquilino: true, unita: { include: { palazzina: true } } },
+    include: {
+      inquilino: true,
+      unita: { include: { palazzina: true } },
+      canoni: { orderBy: { data: "desc" } },
+    },
   });
   if (!c) notFound();
 
-  const nQuote = await prisma.quota.count({ where: { contrattoId: cid } });
+  const nQuote =
+    (await prisma.quota.count({ where: { contrattoId: cid } })) +
+    (await prisma.pagamentoCanone.count({ where: { contrattoId: cid } }));
   const s = statoScadenza(c);
   const oggi = new Date().toISOString().slice(0, 10);
+  const sc = situazioneCanoni(c);
+  const scaduto = s && s.giorniAllaScadenza < 0;
+  const primoAperto = sc.righe.find((r) => r.residuo > 0.005);
+  const mini =
+    "rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100";
+  const meseIt = (m) =>
+    new Date(`${m}-01`).toLocaleDateString("it-IT", {
+      month: "long",
+      year: "numeric",
+    });
   const btn =
     "inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50";
 
@@ -194,12 +225,246 @@ export default async function Scheda({ params }) {
       </section>
 
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-3 font-semibold">Occupazione e rilascio</h2>
+        {c.dataRilascio ? (
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm">
+              Immobile rilasciato il <b>{dataIt(c.dataRilascio)}</b>
+            </p>
+            <BottoneConferma
+              action={annullaRilascio.bind(null, c.id)}
+              messaggio="Annullare il rilascio?"
+              className={btn}
+            >
+              Annulla rilascio
+            </BottoneConferma>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {c.inOccupazione ? (
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm text-gray-600">
+                  Occupazione oltre la scadenza: le bollette ripartite restano a
+                  carico di questo inquilino e il canone continua a risultare
+                  dovuto.
+                </p>
+                <BottoneConferma
+                  action={annullaOccupazione.bind(null, c.id)}
+                  messaggio="Togliere lo stato di occupazione?"
+                  className={btn}
+                >
+                  Annulla
+                </BottoneConferma>
+              </div>
+            ) : scaduto ? (
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm text-gray-600">
+                  Il contratto è scaduto. Se l&apos;inquilino è ancora
+                  nell&apos;immobile, segnalo: finché non registri il rilascio
+                  le bollette continueranno a essergli ripartite.
+                </p>
+                <BottoneConferma
+                  action={segnaOccupazione.bind(null, c.id)}
+                  messaggio="Segnare l'inquilino in occupazione?"
+                  className={btn}
+                >
+                  Segna in occupazione
+                </BottoneConferma>
+              </div>
+            ) : null}
+            <form
+              action={segnaRilascio.bind(null, c.id)}
+              className="flex flex-wrap items-end gap-3"
+            >
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">
+                  Immobile rilasciato il
+                </span>
+                <input
+                  type="date"
+                  name="data"
+                  defaultValue={oggi}
+                  required
+                  className={inputCls}
+                />
+              </label>
+              <button className={btn}>Segna rilascio</button>
+            </form>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold">Canoni incassati</h2>
+            <p className="text-xs text-gray-500">
+              Arretrati (mesi precedenti):{" "}
+              <b
+                className={sc.arretrati > 0 ? "text-red-700" : "text-gray-800"}
+              >
+                {eur(sc.arretrati)}
+              </b>
+              {c.canone == null &&
+                " · imposta il canone mensile con Modifica per calcolare il dovuto"}
+            </p>
+          </div>
+          {sc.righe.some((r) => r.mese < sc.corrente && r.residuo > 0.005) && (
+            <BottoneConferma
+              action={incassaMesiMancanti.bind(null, c.id)}
+              messaggio="Registrare come incassati tutti i mesi passati ancora aperti? La data di incasso sarà il primo giorno di ogni mese (poi modificabile)."
+              className={btn}
+            >
+              Segna incassati i mesi passati
+            </BottoneConferma>
+          )}
+        </div>
+        {dataAcq(c.unita) && dataAcq(c.unita) > c.dataInizio && (
+          <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Il contratto è antecedente all'acquisto dell'unità: i canoni sono
+            conteggiati dal {dataIt(dataAcq(c.unita))}.
+          </p>
+        )}
+
+        {sc.righe.length > 0 && (
+          <table className="mb-4 w-full">
+            <thead className="text-left text-xs text-gray-500">
+              <tr>
+                <th className="pb-2">Mese</th>
+                <th className="text-right">Dovuto</th>
+                <th className="text-right">Incassato</th>
+                <th className="text-right">Residuo</th>
+                <th className="pl-4">Stato</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...sc.righe].reverse().map((r) => (
+                <tr key={r.mese} className="border-t border-gray-100 text-sm">
+                  <td className="py-2 capitalize">{meseIt(r.mese)}</td>
+                  <td className="text-right">{eur(r.atteso)}</td>
+                  <td className="text-right">{eur(r.incassato)}</td>
+                  <td className="text-right">{eur(Math.max(r.residuo, 0))}</td>
+                  <td className="pl-4">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATI_CANONE[r.stato][1]}`}
+                    >
+                      {STATI_CANONE[r.stato][0]}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <h3 className="mb-2 text-xs font-medium text-gray-600">
+          Pagamenti registrati
+        </h3>
+        <div className="space-y-2">
+          {c.canoni.length === 0 && (
+            <p className="text-sm text-gray-500">
+              Nessun pagamento registrato.
+            </p>
+          )}
+          {c.canoni.map((p) => (
+            <div key={p.id} className="flex items-center gap-2">
+              <form
+                action={aggiornaCanone.bind(null, p.id, c.id)}
+                className="flex flex-wrap items-center gap-2"
+              >
+                <input
+                  type="month"
+                  name="mese"
+                  defaultValue={p.mese}
+                  required
+                  className={mini}
+                  title="Mese di competenza"
+                />
+                <input
+                  type="date"
+                  name="data"
+                  defaultValue={p.data.toISOString().slice(0, 10)}
+                  required
+                  className={mini}
+                  title="Data di incasso"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  name="importo"
+                  defaultValue={p.importo}
+                  required
+                  className={`${mini} w-28`}
+                />
+                <button
+                  className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100"
+                  title="Salva modifica"
+                >
+                  <Check size={16} />
+                </button>
+              </form>
+              <BottoneElimina
+                action={eliminaCanone.bind(null, p.id, c.id)}
+                messaggio="Eliminare questo pagamento?"
+              />
+            </div>
+          ))}
+        </div>
+
+        <form
+          action={registraCanone.bind(null, c.id)}
+          className="mt-4 flex flex-wrap items-end gap-2 border-t border-gray-100 pt-4"
+        >
+          <label className="block">
+            <span className="mb-1 block text-xs text-gray-500">
+              Mese di competenza
+            </span>
+            <input
+              type="month"
+              name="mese"
+              defaultValue={(primoAperto ?? { mese: sc.corrente }).mese}
+              required
+              className={mini}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-gray-500">
+              Data di incasso
+            </span>
+            <input
+              type="date"
+              name="data"
+              defaultValue={oggi}
+              required
+              className={mini}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-gray-500">
+              Importo (€)
+            </span>
+            <input
+              type="number"
+              step="0.01"
+              name="importo"
+              required
+              className={`${mini} w-28`}
+              defaultValue={
+                primoAperto ? primoAperto.residuo.toFixed(2) : (c.canone ?? "")
+              }
+            />
+          </label>
+          <button className={btn}>Registra incasso</button>
+        </form>
+      </section>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h2 className="mb-2 font-semibold">Elimina contratto</h2>
         {nQuote > 0 ? (
           <p className="text-sm text-gray-500">
-            Ha {nQuote} quote di bollette collegate, quindi non può essere
-            eliminato senza perdere lo storico. Se il rapporto è concluso,
-            imposta la data di fine con Modifica.
+            Ha {nQuote} dati collegati (bollette o canoni registrati), quindi
+            non può essere eliminato senza perdere lo storico. Se il rapporto è
+            concluso, imposta la data di fine con Modifica.
           </p>
         ) : (
           <BottoneConferma

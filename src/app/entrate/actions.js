@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { fineContratto, rinnovaFine } from "@/lib/scadenze";
+import { situazioneCanoni } from "@/lib/canoni";
 
 const str = (v) => v?.toString().trim() || null;
 const num = (v) => (v == null || String(v).trim() === "" ? null : Number(String(v).replace(",", ".")));
@@ -81,7 +82,9 @@ export async function aggiornaContratto(id, _prev, fd) {
 
 export async function eliminaContratto(id) {
     // con quote di bollette collegate non si elimina, per non perdere lo storico
-    const n = await prisma.quota.count({ where: { contrattoId: id } });
+    const n =
+        (await prisma.quota.count({ where: { contrattoId: id } })) +
+        (await prisma.pagamentoCanone.count({ where: { contrattoId: id } }));
     if (n > 0) return;
     await prisma.contratto.delete({ where: { id } });
     aggiorna(id);
@@ -113,6 +116,8 @@ export async function rinnovaContratto(id) {
             rinnovi: c.rinnovi + 1,
             disdettaInviataIl: null,
             disdettaNote: null,
+            inOccupazione: false,
+            dataRilascio: null,
         },
     });
     aggiorna(id);
@@ -147,4 +152,68 @@ export async function aggiornaIncasso(id, _prev, fd) {
 export async function eliminaIncasso(id) {
     await prisma.incasso.delete({ where: { id } });
     revalidatePath("/entrate");
+}
+
+// ---- occupazione e rilascio ----
+export async function segnaOccupazione(id) {
+    await prisma.contratto.update({ where: { id }, data: { inOccupazione: true } });
+    aggiorna(id);
+}
+export async function annullaOccupazione(id) {
+    await prisma.contratto.update({ where: { id }, data: { inOccupazione: false } });
+    aggiorna(id);
+}
+export async function segnaRilascio(id, fd) {
+    if (!fd.get("data")) return;
+    await prisma.contratto.update({
+        where: { id },
+        data: { dataRilascio: new Date(fd.get("data")), inOccupazione: false },
+    });
+    aggiorna(id);
+}
+export async function annullaRilascio(id) {
+    await prisma.contratto.update({ where: { id }, data: { dataRilascio: null } });
+    aggiorna(id);
+}
+
+// ---- canoni incassati ----
+function leggiCanone(fd) {
+    const mese = fd.get("mese");
+    const importo = num(fd.get("importo"));
+    const data = fd.get("data");
+    if (!mese || importo == null || !data) return null;
+    return { mese, importo, data: new Date(data), note: str(fd.get("note")) };
+}
+
+export async function registraCanone(contrattoId, fd) {
+    const d = leggiCanone(fd);
+    if (!d) return;
+    await prisma.pagamentoCanone.create({ data: { ...d, contrattoId } });
+    aggiorna(contrattoId);
+}
+export async function aggiornaCanone(id, contrattoId, fd) {
+    const d = leggiCanone(fd);
+    if (!d) return;
+    await prisma.pagamentoCanone.update({ where: { id }, data: d });
+    aggiorna(contrattoId);
+}
+export async function eliminaCanone(id, contrattoId) {
+    await prisma.pagamentoCanone.delete({ where: { id } });
+    aggiorna(contrattoId);
+}
+
+// segna come incassati i mesi passati ancora aperti (data = primo del mese, poi modificabile)
+export async function incassaMesiMancanti(contrattoId) {
+    const c = await prisma.contratto.findUnique({
+        where: { id: contrattoId },
+        include: { canoni: true, unita: { include: { palazzina: true } } },
+    });
+    if (!c) return;
+    const sc = situazioneCanoni(c);
+    const da = sc.righe.filter((r) => r.mese < sc.corrente && r.residuo > 0.005);
+    if (!da.length) return;
+    await prisma.pagamentoCanone.createMany({
+        data: da.map((r) => ({ contrattoId, mese: r.mese, data: new Date(`${r.mese}-01`), importo: r.residuo })),
+    });
+    aggiorna(contrattoId);
 }

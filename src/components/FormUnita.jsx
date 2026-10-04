@@ -24,6 +24,38 @@ export default function FormUnita({ palazzine, unita }) {
     unita?.palazzinaId ?? palazzine[0]?.id ?? "nuova",
   );
   const [lungo, setLungo] = useState((unita?.contratti?.length ?? 0) > 0);
+  const palIniz = palazzine.find((p) => p.id === unita?.palazzinaId);
+  const [scope, setScope] = useState(
+    unita
+      ? unita.dataAcquisto || unita.prezzoAcquisto != null
+        ? "unita"
+        : palIniz?.dataAcquisto
+          ? "palazzina"
+          : "nessuno"
+      : "unita",
+  );
+  const scopeEff =
+    scope === "palazzina" && colloc !== "palazzina" ? "unita" : scope;
+  const palCorr =
+    colloc === "palazzina"
+      ? palazzine.find((p) => String(p.id) === String(palSel))
+      : null;
+  const sorg = scopeEff === "palazzina" ? palCorr : unita;
+  const d10 = (x) => (x ? new Date(x).toISOString().slice(0, 10) : "");
+  const A = (label, name, def, tipo = "number") => (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-gray-600">
+        {label}
+      </span>
+      <input
+        name={name}
+        type={tipo}
+        step={tipo === "number" ? "0.01" : undefined}
+        defaultValue={def ?? ""}
+        className={inputCls}
+      />
+    </label>
+  );
 
   const d = {
     ...(unita ?? {}),
@@ -128,11 +160,36 @@ export default function FormUnita({ palazzine, unita }) {
         </label>
         {C("Piano", "piano")}
         {C("Interno", "interno")}
-        {C("Data acquisto", "dataAcquisto", { type: "date" })}
-        {C("Prezzo acquisto (€)", "prezzoAcquisto", {
-          type: "number",
-          step: "0.01",
-        })}
+        
+      </Sezione>
+
+            <Sezione titolo="Acquisto">
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm sm:col-span-2 lg:col-span-3">
+          {[
+            ["unita", "Inserisco i dati di questa unità"],
+            ...(colloc === "palazzina" ? [["palazzina", "Il prezzo è dell'intera palazzina (acquistata in blocco)"]] : []),
+            ["nessuno", "Non inserire ora"],
+          ].map(([v, t]) => (
+            <label key={v} className="flex items-center gap-2">
+              <input type="radio" name="scopeAcquisto" value={v} checked={scopeEff === v} onChange={() => setScope(v)} />
+              {t}
+            </label>
+          ))}
+        </div>
+        {scopeEff !== "nessuno" && (
+          <div key={`${scopeEff}-${palSel}`} className="contents">
+            {A("Data acquisto", "dataAcquisto", d10(sorg?.dataAcquisto), "date")}
+            {A("Prezzo di acquisto (€)", "prezzoAcquisto", sorg?.prezzoAcquisto)}
+            {A("Costi accessori: notaio, imposte, agenzia (€)", "costiAcquisto", sorg?.costiAcquisto)}
+          </div>
+        )}
+        <p className="text-xs text-gray-500 sm:col-span-2 lg:col-span-3">
+          {scopeEff === "palazzina"
+            ? "I dati si salvano sulla palazzina e tutte le sue unità li ereditano. Se la palazzina ha già un acquisto registrato, questo lo sostituisce."
+            : scopeEff === "nessuno"
+              ? "L'unità non avrà dati propri (se ne aveva, vengono azzerati) e erediterà quelli della palazzina, se presenti."
+              : "La data di acquisto è anche quella da cui contano i canoni degli affitti."}
+        </p>
       </Sezione>
 
       <Sezione titolo="Dati catastali">
@@ -188,10 +245,15 @@ export default function FormUnita({ palazzine, unita }) {
 
       <Sezione titolo="Affitto breve">
         <label className="flex items-center gap-2 text-sm sm:col-span-2 lg:col-span-3">
-          <input type="checkbox" name="affittoBreve" defaultChecked={unita?.affittoBreve} /> Destinata ad affitto breve
+          <input
+            type="checkbox"
+            name="affittoBreve"
+            defaultChecked={unita?.affittoBreve}
+          />{" "}
+          Destinata ad affitto breve
         </label>
         {C("Gestore / agenzia", "gestore")}
-        {C("Link calendario (iCal)", "icalUrl", {placeholder: "https://..."})}
+        {C("Link calendario (iCal)", "icalUrl", { placeholder: "https://..." })}
         {C("CIN", "cin")}
       </Sezione>
 

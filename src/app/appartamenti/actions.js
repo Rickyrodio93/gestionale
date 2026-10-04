@@ -27,6 +27,14 @@ async function prepara(fd, id) {
         quotaPossesso: num(fd.get("quotaPossesso")) ?? 100,
         aliquotaImu: num(fd.get("aliquotaImu")),
     };
+    const scope = fd.get("scopeAcquisto") || "nessuno";
+    const acq = {
+        dataAcquisto: fd.get("dataAcquisto") ? new Date(fd.get("dataAcquisto")) : null,
+        prezzoAcquisto: num(fd.get("prezzoAcquisto")),
+        costiAcquisto: num(fd.get("costiAcquisto")),
+    };
+    if (scope !== "nessuno" && !acq.dataAcquisto) return { error: "Indica la data di acquisto." };
+    const vuoto = { dataAcquisto: null, prezzoAcquisto: null, costiAcquisto: null };
     const completo = REQ.every((k) => cat[k] != null);
     const parziale = REQ.some((k) => cat[k] != null);
     const haLungo = id ? (await prisma.contratto.count({ where: { unitaId: id, tipo: "LUNGO" } })) > 0 : false;
@@ -64,20 +72,21 @@ async function prepara(fd, id) {
         palazzinaId,
         indirizzo,
         comune,
-        dataAcquisto: fd.get("dataAcquisto") ? new Date(fd.get("dataAcquisto")) : null,
-        prezzoAcquisto: num(fd.get("prezzoAcquisto")),
+        ...(scope === "unita" ? acq : vuoto),
         affittoBreve: fd.get("affittoBreve") === "on",
         gestore: str(fd.get("gestore")),
         icalUrl: str(fd.get("icalUrl")),
         cin: str(fd.get("cin")),
     };
-    return { dati, cat, completo };
+    return { dati, cat, completo, acqPal: scope === "palazzina" ? acq : null };
 }
 
 export async function creaUnita(_prev, fd) {
     const r = await prepara(fd, null);
+    const u = await prisma.unita.create({ data: { ...r.dati, ...(r.completo && { catasto: { create: r.cat } }) } });
     if (r.error) return r;
     await prisma.unita.create({ data: { ...r.dati, ...(r.completo && { catasto: { create: r.cat } }) } });
+    if (r.acqPal && u.palazzinaId) await prisma.palazzina.update({ where: { id: u.palazzinaId }, data: r.acqPal });
     revalidatePath("/appartamenti");
     redirect("/appartamenti");
 }
@@ -90,6 +99,7 @@ export async function aggiornaUnita(id, _prev, fd) {
         data: { ...r.dati, ...(r.completo && { catasto: { upsert: { create: r.cat, update: r.cat } } }) },
     });
     if (!r.completo) await prisma.datiCatastali.deleteMany({ where: { unitaId: id } });
+    if (r.acqPal && r.dati.palazzinaId) await prisma.palazzina.update({ where: { id: r.dati.palazzinaId }, data: r.acqPal });
     revalidatePath("/appartamenti");
     redirect("/appartamenti");
 }

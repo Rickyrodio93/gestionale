@@ -1,3 +1,5 @@
+import { dataIt } from "./format";
+
 export const addMonths = (d, n) => {
     const x = new Date(d);
     const giorno = x.getUTCDate();
@@ -27,18 +29,33 @@ export function statoScadenza(c) {
     if (c.tipo !== "LUNGO" || !c.dataFine) return null;
 
     const scadenza = new Date(c.dataFine);
-    const limite = addMonths(scadenza, -(c.preavvisoMesi ?? 6)); // ultimo giorno utile per la disdetta
+    const limite = addMonths(scadenza, -(c.preavvisoMesi ?? 6));
     const gScad = giorniA(scadenza);
     const gLimite = giorniA(limite);
 
     let livello = "ok";
-    if (c.disdettaInviataIl) livello = "disdetta_inviata";
+    if (c.dataRilascio && c.dataRilascio <= new Date()) livello = "concluso";
+    else if (c.inOccupazione && gScad < 0) livello = "in_occupazione";
     else if (gScad < 0) livello = "scaduto";
-    else if (gLimite < 0) livello = "termine_superato"; // preavviso non più rispettabile
+    else if (c.disdettaInviataIl) livello = "disdetta_inviata";
+    else if (gLimite < 0) livello = "termine_superato";
     else if (gLimite <= 30) livello = "urgente";
     else if (gLimite <= 90) livello = "attenzione";
 
     return { scadenza, limite, giorniAllaScadenza: gScad, giorniAlLimite: gLimite, livello };
+}
+
+// fine reale dell'occupazione: null = ancora in corso
+export const fineEffettiva = (c) => c.dataRilascio ?? (c.inOccupazione ? null : c.dataFine);
+
+export function etichetta(s) {
+    const fisse = {
+        in_occupazione: "in occupazione",
+        concluso: "concluso",
+        scaduto: "scaduto",
+        disdetta_inviata: "disdetta inviata",
+    };
+    return fisse[s.livello] ?? `disdetta entro ${dataIt(s.limite)}`;
 }
 
 // prossimo rinnovo se non si invia disdetta
@@ -53,4 +70,6 @@ export const coloriScadenza = {
     termine_superato: "bg-red-200 text-red-900",
     scaduto: "bg-red-200 text-red-900",
     disdetta_inviata: "bg-gray-200 text-gray-700",
+    in_occupazione: "bg-orange-100 text-orange-800",
+    concluso: "bg-gray-100 text-gray-500",
 };

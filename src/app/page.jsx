@@ -18,9 +18,10 @@ import {
 import { dataIt, eur } from "@/lib/format";
 import { imuStimata } from "@/lib/imu";
 import { prisma } from "@/lib/prisma";
-import { statoScadenza } from "@/lib/scadenze";
+import { coloriScadenza, statoScadenza } from "@/lib/scadenze";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
+import { etichetta } from "@/lib/scadenze";
 
 export const dynamic = "force-dynamic";
 
@@ -54,15 +55,14 @@ function Kpi({ label, value, sub, children }) {
 }
 
 function prossimaImu(oggi) {
-  const y = oggi.getFullYear()
+  const y = oggi.getFullYear();
   const t0 = new Date(y, oggi.getMonth(), oggi.getDate());
   const c = [
     [new Date(y, 5, 16), "acconto"],
     [new Date(y, 5, 16), "saldo"],
     [new Date(y + 1, 5, 16), "acconto"],
-
   ];
-  return c.find(([d]) => d >= t0)
+  return c.find(([d]) => d >= t0);
 }
 
 export default async function Dashboard({ searchParams }) {
@@ -71,7 +71,7 @@ export default async function Dashboard({ searchParams }) {
   const annoCorrente = oggi.getFullYear();
   const meseCorrente = oggi.getMonth() + 1;
 
-  const { movs, crediti } = await caricaMovimenti();
+  const { movs, crediti, arretrati } = await caricaMovimenti();
 
   const anniDati = [
     ...new Set([annoCorrente, ...movs.map((m) => m.data.getUTCFullYear())]),
@@ -136,9 +136,13 @@ export default async function Dashboard({ searchParams }) {
     .filter(
       (x) =>
         x.s &&
-        ["attenzione", "urgente", "termine_superato", "scaduto"].includes(
-          x.s.livello,
-        ),
+        [
+          "attenzione",
+          "urgente",
+          "termine_superato",
+          "scaduto",
+          "in_occupazione",
+        ].includes(x.s.livello),
     )
     .sort((a, b) => a.s.limite - b.s.limite);
 
@@ -147,9 +151,15 @@ export default async function Dashboard({ searchParams }) {
     where: { dataVendita: null, catasto: { isNot: null } },
     include: { catasto: true },
   });
-  const stimaImu = r2(unicaCat.reduce((t, u) => t + (imuStimata(u.catasto) ?? 0), 0));
-  const imuVersata = r2(movs.filter((m) => m.cat === "IMU" && m.data.getUTCFullYear() === anno).reduce((t, m) => t + m.importo, 0));
-  const nextImu = prossimaImu(oggi)
+  const stimaImu = r2(
+    unicaCat.reduce((t, u) => t + (imuStimata(u.catasto) ?? 0), 0),
+  );
+  const imuVersata = r2(
+    movs
+      .filter((m) => m.cat === "IMU" && m.data.getUTCFullYear() === anno)
+      .reduce((t, m) => t + m.importo, 0),
+  );
+  const nextImu = prossimaImu(oggi);
 
   const utile = tot.risultato >= 0;
   const margine =
@@ -228,7 +238,7 @@ export default async function Dashboard({ searchParams }) {
         </section>
 
         {/* indicatori */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Kpi
             label="Entrate"
             value={eur(tot.entrate)}
@@ -250,6 +260,18 @@ export default async function Dashboard({ searchParams }) {
               className="text-xs text-indigo-600 hover:underline"
             >
               Vedi elenco
+            </Link>
+          </Kpi>
+          <Kpi
+            label="Canoni arretrati"
+            value={eur(arretrati)}
+            sub="mesi precedenti non incassati"
+          >
+            <Link
+              href="/entrate"
+              className="text-xs text-indigo-600 hover:underline"
+            >
+              Vedi contratti
             </Link>
           </Kpi>
         </div>
@@ -329,7 +351,7 @@ export default async function Dashboard({ searchParams }) {
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${coloriScadenza[s.livello]}`}
                     >
-                      disdetta entro {dataIt(s.limite)}
+                      {etichetta(s)}
                     </span>
                   </li>
                 ))}
@@ -350,17 +372,26 @@ export default async function Dashboard({ searchParams }) {
               </div>
               <div>
                 <p className="text-xs text-gray-500">Prossima scadenza</p>
-                <p className="font-semibold">{nextImu ? dataIt(nextImu[0]) : "-"}</p>
+                <p className="font-semibold">
+                  {nextImu ? dataIt(nextImu[0]) : "-"}
+                </p>
                 <p className="text-xs text-gray-500">{nextImu?.[1]}</p>
               </div>
             </div>
-            <p className="mt-3 text-xs text-gray-500">La stima è indicativa. Il dettaglio è in <Link href="/spese" className="text-indigo-600 hover:underline">Spese</Link>.</p>
+            <p className="mt-3 text-xs text-gray-500">
+              La stima è indicativa. Il dettaglio è in{" "}
+              <Link href="/spese" className="text-indigo-600 hover:underline">
+                Spese
+              </Link>
+              .
+            </p>
           </section>
         </div>
 
         {movs.length === 0 && (
           <p className="text-sm text-gray-500">
-            Non ci sono ancora movimenti: inserisci contratti con canone, incassi, spese o bollette e la dashboard si popola da sola.
+            Non ci sono ancora movimenti: inserisci contratti con canone,
+            incassi, spese o bollette e la dashboard si popola da sola.
           </p>
         )}
       </div>

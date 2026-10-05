@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { fineContratto, rinnovaFine } from "@/lib/scadenze";
 import { situazioneCanoni } from "@/lib/canoni";
+import { calcolaCauzione } from "@/lib/cauzione";
 
 const str = (v) => v?.toString().trim() || null;
 const num = (v) => (v == null || String(v).trim() === "" ? null : Number(String(v).replace(",", ".")));
@@ -48,6 +49,8 @@ async function leggiContratto(fd) {
             canone: num(fd.get("canone")),
             persone: num(fd.get("persone")),
             cedolare: fd.get("cedolare") === "on",
+            cauzione: num(fd.get("cauzione")),
+            cauzioneVersataIl: fd.get("cauzioneVersataIl") ? new Date(fd.get("cauzioneVersataIl")) : null,
         },
     };
 }
@@ -75,12 +78,19 @@ export async function creaContratto(_prev, fd) {
 export async function aggiornaContratto(id, _prev, fd) {
     const r = await leggiContratto(fd);
     if (r.error) return r;
+    const att = await prisma.contratto.findUnique({ where: { id }, select: { cauzioneRestituitaIl: true } });
+    if (att?.cauzioneRestituitaIl) {
+        delete r.dati.cauzione;
+        delete r.dati.cauzioneVersataIl;
+    }
     await prisma.contratto.update({ where: { id }, data: r.dati });
     aggiorna(id);
     redirect(`/entrate/contratti/${id}`);
 }
 
 export async function eliminaContratto(id) {
+    const cc = await prisma.contratto.findUnique({ where: { id }, select: { cauzione: true, cauzioneRestituitaIl: true } });
+    if (cc?.cauzione && !cc.cauzioneRestituitaIl) return; // cauzione ancora da restituire
     // con quote di bollette collegate non si elimina, per non perdere lo storico
     const n =
         (await prisma.quota.count({ where: { contrattoId: id } })) +
@@ -216,4 +226,93 @@ export async function incassaMesiMancanti(contrattoId) {
         data: da.map((r) => ({ contrattoId, mese: r.mese, data: new Date(`${r.mese}-01`), importo: r.residuo })),
     });
     aggiorna(contrattoId);
+}
+
+// ---- cauzione ----
+async function aperta(contrattoId) {
+    const c = await prisma.contratto.findUnique({ where: { id: contrattoId }, select: { cauzioneRestituitaIl: true } });
+    return !!c && !c.cauzioneRestituitaIl;
+}
+
+function leggiTrattenuta(fd) {
+    const descrizione = str(fd.get("descrizione"));
+    const importo = num(fd.get("importo"));
+    if (!descrizione || !importo || importo <= 0) return null;
+    return { descrizione, importo };
+}
+
+export async function aggiungiTrattenuta(contrattoId, fd) {
+    const d = leggiTrattenuta(fd);
+    if (!d || !(await aperta(contrattoId))) return;
+    await prisma.trattenutaCauzione.create({ data: { ...d, contrattoId } });
+    aggiorna(contrattoId);
+}
+
+export async function aggiornaTrattenuta(id, contrattoId, fd) {
+    const d = leggiTrattenuta(fd);
+    if (!d || !(await aperta(contrattoId))) return;
+    await prisma.trattenutaCauzione.update({ where: { id }, data: d });
+    aggiorna(contrattoId);
+}
+
+export async function eliminaTrattenuta(id, contrattoId) {
+    if (!(await aperta(contrattoId))) return;
+    await prisma.trattenutaCauzione.delete({ where: { id } });
+    aggiorna(contrattoId);
+}
+
+export async function liquidaCauzione(id, fd) {
+    if (!fd.get("data")) return;
+    const c = await prisma.contratto.findUnique({
+        where: { id },
+        include: {
+            canoni: true,
+            unita: { include: { palazzina: true } },
+            quote: { include: { pagamenti: true } },
+            trattenute: { orderBy: { id: "asc" } },
+        },
+    });
+    if (!c || c.cauzione == null || !c.cauzioneVersataIl || c.cauzioneRestituitaIl) return;
+
+    const k = calcolaCauzione(c);
+    const d = new Date(fd.get("data"));
+    const r2 = (n) => Math.round(n * 100) / 100;
+    let disp = k.cauzione;
+    const ops = [];
+
+    for (const m of k.mesiAperti) {
+        const x = Math.min(disp, m.residuo);
+        if (x <= 0.005) break;
+        ops.push(prisma.pagamentoCanone.create({
+            data: { contrattoId: id, mese: m.mese, data: d, importo: r2(x), note: "Trattenuto dalla cauzione", daCauzione: true },
+        }));
+        disp = r2(disp - x);
+    }
+    for (const q of k.quoteAperte) {
+        const x = Math.min(disp, q.residuo);
+        if (x <= 0.005) break;
+        ops.push(prisma.pagamento.create({ data: { quotaId: q.id, data: d, importo: r2(x), daCauzione: true } }));
+        disp = r2(disp - x);
+    }
+    for (const t of c.trattenute) {
+        const x = Math.max(0, Math.min(disp, t.importo));
+        ops.push(prisma.trattenutaCauzione.update({ where: { id: t.id }, data: { applicato: r2(x) } }));
+        disp = r2(disp - x);
+    }
+    ops.push(prisma.contratto.update({ where: { id }, data: { cauzioneRestituitaIl: d, cauzioneRestituita: r2(disp) } }));
+
+    await prisma.$transaction(ops);
+    aggiorna(id);
+    revalidatePath("/spese/bollette");
+}
+
+export async function annullaLiquidazione(id) {
+    await prisma.$transaction([
+        prisma.pagamentoCanone.deleteMany({ where: { contrattoId: id, daCauzione: true } }),
+        prisma.pagamento.deleteMany({ where: { daCauzione: true, quota: { contrattoId: id } } }),
+        prisma.trattenutaCauzione.updateMany({ where: { contrattoId: id }, data: { applicato: null } }),
+        prisma.contratto.update({ where: { id }, data: { cauzioneRestituitaIl: null, cauzioneRestituita: null } }),
+    ]);
+    aggiorna(id);
+    revalidatePath("/spese/bollette");
 }

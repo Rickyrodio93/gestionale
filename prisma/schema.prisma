@@ -73,6 +73,7 @@ enum CategoriaSpesa {
   CONDOMINIO
   ORDINARIA
   STRAORDINARIA
+  MUTUO
   ALTRO
 }
 
@@ -116,34 +117,36 @@ model ValoreImmobile {
 }
 
 model Unita {
-  id             Int               @id @default(autoincrement())
-  palazzina      Palazzina?        @relation(fields: [palazzinaId], references: [id])
-  palazzinaId    Int? // nullo = unità autonoma
-  nome           String
-  piano          String?
-  interno        String?
-  indirizzo      String? // obbligatorio se autonoma
-  comune         String?
-  tipo           TipoUnita         @default(APPARTAMENTO)
-  catasto        DatiCatastali?
-  contatori      Contatore[]
-  contratti      Contratto[]
-  dataAcquisto   DateTime?
-  prezzoAcquisto Float?
-  dataVendita    DateTime? // se valorizzata, l'unità esce dal portafoglio attivo
-  prezzoVendita  Float?
-  valori         ValoreImmobile[]
-  affittoBreve   Boolean           @default(false)
-  gestore        String? // es. nome dell'agenzia
-  icalUrl        String? // link calendario (Airbnb o principale dell'agenzia)
-  cin            String? // codice identificativo nazionale, se previsto
-  prenotazioni   Prenotazione[]
-  incassi        Incasso[]
-  spese          Spesa[]
-  bollette       Bolletta[]
-  ricorrenti     SpesaRicorrente[]
-  costiAcquisto  Float?
-  costiVendita   Float?
+  id                Int               @id @default(autoincrement())
+  palazzina         Palazzina?        @relation(fields: [palazzinaId], references: [id])
+  palazzinaId       Int? // nullo = unità autonoma
+  nome              String
+  piano             String?
+  interno           String?
+  indirizzo         String? // obbligatorio se autonoma
+  comune            String?
+  tipo              TipoUnita         @default(APPARTAMENTO)
+  catasto           DatiCatastali?
+  contatori         Contatore[]
+  contratti         Contratto[]
+  dataAcquisto      DateTime?
+  prezzoAcquisto    Float?
+  dataVendita       DateTime? // se valorizzata, l'unità esce dal portafoglio attivo
+  prezzoVendita     Float?
+  valori            ValoreImmobile[]
+  affittoBreve      Boolean           @default(false)
+  gestore           String? // es. nome dell'agenzia
+  icalUrl           String? // link calendario (Airbnb o principale dell'agenzia)
+  cin               String? // codice identificativo nazionale, se previsto
+  prenotazioni      Prenotazione[]
+  incassi           Incasso[]
+  spese             Spesa[]
+  bollette          Bolletta[]
+  ricorrenti        SpesaRicorrente[]
+  costiAcquisto     Float?
+  costiVendita      Float?
+  icalSincronizzato DateTime?
+  icalErrore        String?
 }
 
 model DatiCatastali {
@@ -176,28 +179,33 @@ model Inquilino {
 }
 
 model Contratto {
-  id                Int                @id @default(autoincrement())
-  unita             Unita              @relation(fields: [unitaId], references: [id])
-  unitaId           Int
-  inquilino         Inquilino          @relation(fields: [inquilinoId], references: [id])
-  inquilinoId       Int
-  tipo              TipoContratto      @default(LUNGO)
-  modalita          ModalitaContratto? // solo per i lunghi
-  dataInizio        DateTime
-  dataFine          DateTime? // scadenza corrente
-  durataMesi        Int? // es. 48
-  rinnovoMesi       Int? // es. 48
-  preavvisoMesi     Int                @default(6)
-  rinnovi           Int                @default(0)
-  disdettaInviataIl DateTime? // data invio comunicazione
-  disdettaNote      String? // motivo, raccomandata/PEC, ecc.
-  canone            Float?
-  persone           Int?
-  cedolare          Boolean            @default(false)
-  quote             Quota[]
-  inOccupazione     Boolean            @default(false)
-  dataRilascio      DateTime?
-  canoni            PagamentoCanone[]
+  id                   Int                  @id @default(autoincrement())
+  unita                Unita                @relation(fields: [unitaId], references: [id])
+  unitaId              Int
+  inquilino            Inquilino            @relation(fields: [inquilinoId], references: [id])
+  inquilinoId          Int
+  tipo                 TipoContratto        @default(LUNGO)
+  modalita             ModalitaContratto? // solo per i lunghi
+  dataInizio           DateTime
+  dataFine             DateTime? // scadenza corrente
+  durataMesi           Int? // es. 48
+  rinnovoMesi          Int? // es. 48
+  preavvisoMesi        Int                  @default(6)
+  rinnovi              Int                  @default(0)
+  disdettaInviataIl    DateTime? // data invio comunicazione
+  disdettaNote         String? // motivo, raccomandata/PEC, ecc.
+  canone               Float?
+  persone              Int?
+  cedolare             Boolean              @default(false)
+  quote                Quota[]
+  inOccupazione        Boolean              @default(false)
+  dataRilascio         DateTime?
+  canoni               PagamentoCanone[]
+  cauzione             Float?
+  cauzioneVersataIl    DateTime?
+  cauzioneRestituitaIl DateTime? // valorizzata = cauzione liquidata
+  cauzioneRestituita   Float? // importo restituito all'inquilino
+  trattenute           TrattenutaCauzione[]
 }
 
 // Contatore generale della palazzina (unitaId nullo) o divisionale di un'unità
@@ -258,11 +266,12 @@ model Quota {
 }
 
 model Pagamento {
-  id      Int      @id @default(autoincrement())
-  quota   Quota    @relation(fields: [quotaId], references: [id], onDelete: Cascade)
-  quotaId Int
-  data    DateTime
-  importo Float
+  id         Int      @id @default(autoincrement())
+  quota      Quota    @relation(fields: [quotaId], references: [id], onDelete: Cascade)
+  quotaId    Int
+  data       DateTime
+  importo    Float
+  daCauzione Boolean  @default(false)
 }
 
 model Prenotazione {
@@ -284,6 +293,7 @@ model Prenotazione {
   dataAccredito      DateTime?
   origine            String            @default("manuale") // manuale | ical | rendiconto
   note               String?
+  blocco             Boolean           @default(false) // "non disponibile" senza dettagli (blocco o altro canale)
 
   @@unique([unitaId, canale, uidEsterno])
 }
@@ -326,6 +336,7 @@ model PagamentoCanone {
   data        DateTime // data di incasso
   importo     Float
   note        String?
+  daCauzione  Boolean   @default(false)
 }
 
 model SpesaRicorrente {
@@ -344,4 +355,13 @@ model SpesaRicorrente {
   palazzinaId       Int?
   ultimaGenerazione DateTime?
   spese             Spesa[]
+}
+
+model TrattenutaCauzione {
+  id          Int       @id @default(autoincrement())
+  contratto   Contratto @relation(fields: [contrattoId], references: [id], onDelete: Cascade)
+  contrattoId Int
+  descrizione String
+  importo     Float
+  applicato   Float? // importo effettivamente trattenuto alla liquidazione
 }

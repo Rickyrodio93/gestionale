@@ -27,6 +27,10 @@ export default async function Entrate({ searchParams }) {
     .filter((c) => !(c.dataRilascio && c.dataRilascio <= new Date()))
     .reduce((t, c) => t + (c.canone ?? 0), 0);
 
+  const cauzioni = contratti
+    .filter((c) => c.cauzione && c.cauzioneVersataIl && !c.cauzioneRestituitaIl)
+    .reduce((t, c) => t + c.cauzione, 0);
+
   const tutti = await prisma.incasso.findMany({
     include: { unita: true },
     orderBy: { data: "desc" },
@@ -77,6 +81,7 @@ export default async function Entrate({ searchParams }) {
             <p className="text-xs text-gray-500">
               {contratti.length} contratti · canoni mensili{" "}
               <b className="text-gray-800">{eur(totaleCanoni)}</b>
+              · cauzioni detenute <b className="text-gray-800">{eur(cauzioni)}</b>
             </p>
           </div>
           <table className="w-full">
@@ -88,6 +93,8 @@ export default async function Entrate({ searchParams }) {
                 <th className="text-right">Canone</th>
                 <th className="pl-4">Disdetta</th>
                 <th className="pl-4">Canoni</th>
+                <th className="pl-4">Cauzione</th>
+
                 <th />
               </tr>
             </thead>
@@ -147,6 +154,13 @@ export default async function Entrate({ searchParams }) {
                           );
                         })()
                       )}
+                    </td>
+                    <td className="pl-4 yext-xs text-gray-600">
+                      {c.cauzione == null ? "-"
+                    : c.cauzioneRestituitaIl ? "liquidata"
+                    : c.cauzioneVersataIl ? eur(c.cauzione)
+                    : <span className="text-amber-600">da versare</span>  
+                    }
                     </td>
                     <td className="pl-2 text-right">
                       <Link

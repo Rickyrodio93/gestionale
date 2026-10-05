@@ -19,7 +19,7 @@ export const CAT_USCITE = {
     MUTUO: "Rate mutuo / prestiti",
     ALTRO: "Altro",
 };
-export const CAT_ENTRATE = { LUNGHI: "Affitti lunghi", BREVI: "Affitti brevi" };
+export const CAT_ENTRATE = { LUNGHI: "Affitti lunghi", BREVI: "Affitti brevi", TRATTENUTE: "Trattenute da cauzione" };
 
 const chiaveDi = (unita, palazzina) =>
     palazzina?.nome ?? unita?.palazzina?.nome ?? unita?.nome ?? "Altro";
@@ -54,6 +54,15 @@ export async function caricaMovimenti() {
         if (acq && i.data < acq) continue;
         movs.push({ data: i.data, tipo: "entrata", cat: "BREVI", importo: i.importo, ...rif(i.unita) });
     }
+
+    // trattenute da cauzione (danni, pulizie…) alla liquidazione
+    const tratt = await prisma.trattenutaCauzione.findMany({
+        where: { applicato: { gt: 0 } },
+        include: { contratto: { include: { unita: { include: { palazzina: true } } } } },
+    });
+    for (const t of tratt)
+        if (t.contratto.cauzioneRestituitaIl)
+            movs.push({ data: t.contratto.cauzioneRestituitaIl, tipo: "entrata", cat: "TRATTENUTE", importo: t.applicato, ...rif(t.contratto.unita) });
 
     const spese = await prisma.spesa.findMany({
         include: { palazzina: true, unita: { include: { palazzina: true } } },

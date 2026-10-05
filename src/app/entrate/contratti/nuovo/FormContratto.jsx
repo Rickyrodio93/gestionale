@@ -34,6 +34,7 @@ const C = (label, name, o = {}) => (
       onChange={o.onChange}
       defaultValue={o.value === undefined ? (o.def ?? "") : undefined}
       className={inputCls}
+      disabled={o.disabled}
     />
   </label>
 );
@@ -169,6 +170,17 @@ export default function FormContratto({ unita, inquilini, contratto }) {
         {C("N° persone", "persone", {
           type: "number",
           def: contratto?.persone,
+        })}
+        {C("Cauzione (€)", "cauzione", {
+          type: "number",
+          step: "0.01",
+          def: contratto?.cauzione,
+          disabled: !!contratto?.cauzioneRestituitaIl,
+        })}
+        {C("Cauzione versata il", "cauzioneVersataIl", {
+          type: "date",
+          def: iso(contratto?.cauzioneVersataIl),
+          disabled: !!contratto?.cauzioneRestituitaIl,
         })}
         <label className="flex items-center gap-2 text-sm">
           <input

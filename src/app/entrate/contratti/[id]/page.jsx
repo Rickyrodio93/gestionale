@@ -6,14 +6,16 @@ import { statoScadenza, coloriScadenza, rinnovaFine } from "@/lib/scadenze";
 import { eur, dataIt } from "@/lib/format";
 import { inputCls } from "@/lib/ui";
 import BottoneConferma from "@/components/BottoneConferma";
+import { situazioneCanoni, STATI_CANONE } from "@/lib/canoni";
+import BottoneElimina from "@/components/BottoneElimina";
+import { dataAcq } from "@/lib/investimento";
+import { calcolaCauzione } from "@/lib/cauzione";
 import {
   segnaDisdetta,
   annullaDisdetta,
   rinnovaContratto,
   eliminaContratto,
 } from "@/app/entrate/actions";
-import { situazioneCanoni, STATI_CANONE } from "@/lib/canoni";
-import BottoneElimina from "@/components/BottoneElimina";
 import {
   segnaOccupazione,
   annullaOccupazione,
@@ -23,8 +25,12 @@ import {
   aggiornaCanone,
   eliminaCanone,
   incassaMesiMancanti,
+  aggiungiTrattenuta,
+  aggiornaTrattenuta,
+  eliminaTrattenuta,
+  liquidaCauzione,
+  annullaLiquidazione,
 } from "@/app/entrate/actions";
-import { dataAcq } from "@/lib/investimento";
 
 export const dynamic = "force-dynamic";
 
@@ -66,13 +72,16 @@ export default async function Scheda({ params }) {
       inquilino: true,
       unita: { include: { palazzina: true } },
       canoni: { orderBy: { data: "desc" } },
+      quote: { include: { pagamenti: true } },
+      trattenute: { orderBy: { id: "asc" } },
     },
   });
   if (!c) notFound();
 
   const nQuote =
     (await prisma.quota.count({ where: { contrattoId: cid } })) +
-    (await prisma.pagamentoCanone.count({ where: { contrattoId: cid } }));
+    (await prisma.pagamentoCanone.count({ where: { contrattoId: cid } })) +
+    (c.cauzione && !c.cauzioneRestituitaIl ? 1 : 0);
   const s = statoScadenza(c);
   const oggi = new Date().toISOString().slice(0, 10);
   const sc = situazioneCanoni(c);
@@ -457,6 +466,197 @@ export default async function Scheda({ params }) {
           <button className={btn}>Registra incasso</button>
         </form>
       </section>
+
+      {c.cauzione != null &&
+        (() => {
+          const liq = !!c.cauzioneRestituitaIl;
+          const k = calcolaCauzione(c);
+          const trattenuto =
+            Math.round((c.cauzione - (c.cauzioneRestituita ?? 0)) * 100) / 100;
+          const riga = (label, value, forte) => (
+            <div
+              key={label}
+              className={`flex justify-between py-1.5 text-sm ${forte ? "border-t border-gray-200 font-semibold" : ""}`}
+            >
+              <span>{label}</span>
+              <span>{value}</span>
+            </div>
+          );
+          return (
+            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="font-semibold">Cauzione</h2>
+                  <p className="text-xs text-gray-500">
+                    {eur(c.cauzione)}
+                    {c.cauzioneVersataIl
+                      ? ` · versata il ${dataIt(c.cauzioneVersataIl)}`
+                      : " · non ancora versata: indica la data con Modifica"}
+                  </p>
+                </div>
+                {liq && (
+                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">
+                    Liquidata il {dataIt(c.cauzioneRestituitaIl)}
+                  </span>
+                )}
+              </div>
+
+              {!liq && c.canone > 0 && c.cauzione > c.canone * 3 && (
+                <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  La cauzione supera tre mensilità: per le locazioni abitative
+                  di norma è il limite massimo. Verifica con il tuo
+                  professionista.
+                </p>
+              )}
+
+              {liq ? (
+                <div>
+                  {riga("Cauzione versata", eur(c.cauzione))}
+                  {riga("Trattenuto", eur(trattenuto))}
+                  {riga(
+                    "Restituito all'inquilino",
+                    eur(c.cauzioneRestituita ?? 0),
+                    true,
+                  )}
+                  {c.trattenute.length > 0 && (
+                    <ul className="mt-2 text-xs text-gray-500">
+                      {c.trattenute.map((t) => (
+                        <li key={t.id}>
+                          {t.descrizione}: {eur(t.applicato ?? 0)}
+                          {(t.applicato ?? 0) < t.importo &&
+                            ` (su ${eur(t.importo)})`}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="mt-3">
+                    <BottoneConferma
+                      action={annullaLiquidazione.bind(null, c.id)}
+                      messaggio="Annullare la liquidazione? I pagamenti creati dalla trattenuta verranno eliminati."
+                      className={btn}
+                    >
+                      Annulla liquidazione
+                    </BottoneConferma>
+                  </div>
+                </div>
+              ) : c.cauzioneVersataIl ? (
+                <>
+                  {riga("Cauzione versata", eur(k.cauzione))}
+                  {riga(
+                    "− Canoni non incassati (incluso il mese in corso)",
+                    eur(k.canoni),
+                  )}
+                  {riga("− Bollette da rimborsare", eur(k.bollette))}
+                  {riga("− Altre trattenute", eur(k.manuali))}
+                  {k.scoperto > 0
+                    ? riga(
+                        "Debito non coperto dalla cauzione",
+                        eur(k.scoperto),
+                        true,
+                      )
+                    : riga(
+                        "Da restituire all'inquilino",
+                        eur(k.daRestituire),
+                        true,
+                      )}
+                  {k.scoperto > 0 && (
+                    <p className="mt-1 text-xs text-red-700">
+                      La cauzione non basta: i debiti residui restano da
+                      incassare dopo la liquidazione.
+                    </p>
+                  )}
+
+                  <h3 className="mb-2 mt-5 text-xs font-medium text-gray-600">
+                    Altre trattenute (danni, pulizie, utenze finali…)
+                  </h3>
+                  <div className="space-y-2">
+                    {c.trattenute.map((t) => (
+                      <div key={t.id} className="flex items-center gap-2">
+                        <form
+                          action={aggiornaTrattenuta.bind(null, t.id, c.id)}
+                          className="flex flex-wrap items-center gap-2"
+                        >
+                          <input
+                            name="descrizione"
+                            defaultValue={t.descrizione}
+                            required
+                            className={`${mini} w-64`}
+                          />
+                          <input
+                            type="number"
+                            step="0.01"
+                            name="importo"
+                            defaultValue={t.importo}
+                            required
+                            className={`${mini} w-28`}
+                          />
+                          <button
+                            className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100"
+                            title="Salva modifica"
+                          >
+                            <Check size={16} />
+                          </button>
+                        </form>
+                        <BottoneElimina
+                          action={eliminaTrattenuta.bind(null, t.id, c.id)}
+                          messaggio="Eliminare questa trattenuta?"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <form
+                    action={aggiungiTrattenuta.bind(null, c.id)}
+                    className="mt-2 flex flex-wrap items-center gap-2"
+                  >
+                    <input
+                      name="descrizione"
+                      required
+                      placeholder="Descrizione"
+                      className={`${mini} w-64`}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="importo"
+                      required
+                      placeholder="Importo (€)"
+                      className={`${mini} w-28`}
+                    />
+                    <button className={btn}>Aggiungi trattenuta</button>
+                  </form>
+
+                  {!c.dataRilascio && (
+                    <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Prima di liquidare registra il rilascio dell'immobile
+                      (sezione «Occupazione e rilascio»): così i canoni dovuti
+                      si fermano alla data giusta.
+                    </p>
+                  )}
+                  <form
+                    action={liquidaCauzione.bind(null, c.id)}
+                    className="mt-4 flex flex-wrap items-end gap-3 border-t border-gray-100 pt-4"
+                  >
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-gray-600">
+                        Data di liquidazione
+                      </span>
+                      <input
+                        type="date"
+                        name="data"
+                        defaultValue={oggi}
+                        required
+                        className={inputCls}
+                      />
+                    </label>
+                    <button className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                      Liquida cauzione
+                    </button>
+                  </form>
+                </>
+              ) : null}
+            </section>
+          );
+        })()}
 
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h2 className="mb-2 font-semibold">Elimina contratto</h2>

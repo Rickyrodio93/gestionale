@@ -16,6 +16,7 @@ export const CAT_USCITE = {
     CONDOMINIO: "Condominio",
     ORDINARIA: "Manutenzione ordinaria",
     STRAORDINARIA: "Ristrutturazioni straord.",
+    MUTUO: "Rate mutuo / prestiti",
     ALTRO: "Altro",
 };
 export const CAT_ENTRATE = { LUNGHI: "Affitti lunghi", BREVI: "Affitti brevi" };

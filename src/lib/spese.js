@@ -4,5 +4,6 @@ export const CATEGORIE = {
     CONDOMINIO: "Spese condominiali",
     ORDINARIA: "Manutenzione / ristrutturazione ordinaria",
     STRAORDINARIA: "Ristrutturazione straordinaria",
+    MUTUO: "Rata mutuo / prestiti",
     ALTRO: "Altro",
 };

@@ -31,6 +31,19 @@ export function prossima(r, da = new Date()) {
     return null;
 }
 
+// occorrenze future (dopo `da`, fino a `fino`), per il calendario
+export function occorrenzeFuture(r, da, fino) {
+  const step = FREQ[r.frequenza][1];
+  const limite = r.al && r.al < fino ? r.al : fino;
+  const out = [];
+  for (let k = 0; k < 600; k++) {
+    const d = addMonths(r.dal, k * step);
+    if (d > limite) break;
+    if (d > da) out.push(d);
+  }
+  return out;
+}
+
 // crea le spese reali mancanti fino a oggi; sicura da chiamare più volte
 export async function sincronizzaRicorrenti() {
     try {

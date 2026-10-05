@@ -1,0 +1,1 @@
+export const CANALI = { AIRBNB: "Airbnb", BOOKING: "Booking.com", DIRETTA: "Diretta", ALTRO: "Altro" };

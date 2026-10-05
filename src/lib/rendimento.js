@@ -85,7 +85,7 @@ export async function calcolaInvestimenti() {
         const flussi = [{ data: inv.acq, importo: -capitale }];
         let operativo = 0;
         for (const m of movs) {
-            if (!inScope(m) || m.data > fineP) continue;
+                  if (m.cat === "MUTUO" || !inScope(m) || m.data > fineP) continue;
             const v = m.tipo === "entrata" ? m.importo : -m.importo;
             operativo += v;
             flussi.push({ data: m.data, importo: v });

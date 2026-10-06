@@ -154,40 +154,52 @@ export default async function Scheda({ params }) {
             </div>
 
             <div className="space-y-2">
-              {q.pagamenti.map((p) => (
-                <div key={p.id} className="flex items-center gap-2">
-                  <form
-                    action={aggiornaPagamento.bind(null, p.id, b.id)}
-                    className="flex items-center gap-2"
-                  >
-                    <input
-                      type="date"
-                      name="data"
-                      defaultValue={iso(p.data)}
-                      required
-                      className={mini}
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      name="importo"
-                      defaultValue={p.importo}
-                      required
-                      className={`${mini} w-28`}
-                    />
-                    <button
-                      className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100"
-                      title="Salva modifica"
+              {q.pagamenti.map((p) =>
+                p.versamentoId ? (
+                  <p key={p.id} className="text-sm text-gray-500">
+                    {dataIt(p.data)} · {eur(p.importo)} · da versamento{" "}
+                    <Link
+                      href={`/entrate/inquilini/${q.contratto.inquilinoId}`}
+                      className="text-indigo-600 hover:underline"
                     >
-                      <Check size={16} />
-                    </button>
-                  </form>
-                  <BottoneElimina
-                    action={eliminaPagamento.bind(null, p.id, b.id)}
-                    messaggio="Eliminare questo pagamento?"
-                  />
-                </div>
-              ))}
+                      (vedi report)
+                    </Link>
+                  </p>
+                ) : (
+                  <div key={p.id} className="flex items-center gap-2">
+                    <form
+                      action={aggiornaPagamento.bind(null, p.id, b.id)}
+                      className="flex items-center gap-2"
+                    >
+                      <input
+                        type="date"
+                        name="data"
+                        defaultValue={iso(p.data)}
+                        required
+                        className={mini}
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        name="importo"
+                        defaultValue={p.importo}
+                        required
+                        className={`${mini} w-28`}
+                      />
+                      <button
+                        className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100"
+                        title="Salva modifica"
+                      >
+                        <Check size={16} />
+                      </button>
+                    </form>
+                    <BottoneElimina
+                      action={eliminaPagamento.bind(null, p.id, b.id)}
+                      messaggio="Eliminare questo pagamento?"
+                    />
+                  </div>
+                ),
+              )}
             </div>
 
             <form

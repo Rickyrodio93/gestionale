@@ -49,6 +49,8 @@ export default function FormContratto({ unita, inquilini, contratto }) {
   );
   const [durata, setDurata] = useState(contratto?.durataMesi ?? 48);
   const [rinnovo, setRinnovo] = useState(contratto?.rinnovoMesi ?? 48);
+  const [per, setPer] = useState(contratto?.periodicitaMesi ?? 1);
+  const [can, setCan] = useState(contratto?.canone ?? "");
 
   return (
     <form action={action} className="max-w-5xl space-y-5">
@@ -164,9 +166,40 @@ export default function FormContratto({ unita, inquilini, contratto }) {
         })}
         {C("Canone mensile (€)", "canone", {
           type: "number",
-          step: "0.01",
-          def: contratto?.canone,
+          step: "any",
+          value: can,
+          onChange: (e) => setCan(e.target.value),
         })}
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-gray-600">
+            Il canone si paga
+          </span>
+          <select
+            name="periodicitaMesi"
+            value={per}
+            onChange={(e) => setPer(Number(e.target.value))}
+            className={inputCls}
+          >
+            <option value={1}>Ogni mese</option>
+            <option value={2}>Ogni 2 mesi</option>
+            <option value={3}>Ogni 3 mesi (trimestrale)</option>
+            <option value={6}>Ogni 6 mesi</option>
+            <option value={12}>Ogni anno</option>
+          </select>
+        </label>
+        {per > 1 &&
+          C(
+            "Primo giorno di un periodo di pagamento (vuoto = inizio contratto)",
+            "ancoraPeriodi",
+            { type: "date", def: iso(contratto?.ancoraPeriodi) },
+          )}
+        {per > 1 && can !== "" && (
+          <p className="text-xs text-gray-500 sm:col-span-2 lg:col-span-3">
+            Importo di ogni periodo: <b>{(Number(can) * per).toFixed(2)} €</b>,
+            dovuto in anticipo dal primo giorno del periodo. Per 1050 €
+            trimestrali inserisci 350 come canone mensile.
+          </p>
+        )}
         {C("N° persone", "persone", {
           type: "number",
           def: contratto?.persone,

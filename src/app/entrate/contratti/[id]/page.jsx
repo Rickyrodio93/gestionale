@@ -6,10 +6,11 @@ import { statoScadenza, coloriScadenza, rinnovaFine } from "@/lib/scadenze";
 import { eur, dataIt } from "@/lib/format";
 import { inputCls } from "@/lib/ui";
 import BottoneConferma from "@/components/BottoneConferma";
-import { situazioneCanoni, STATI_CANONE } from "@/lib/canoni";
+import { situazioneCanoni, STATI_CANONE, etichettaPeriodo } from "@/lib/canoni";
 import BottoneElimina from "@/components/BottoneElimina";
 import { dataAcq } from "@/lib/investimento";
 import { calcolaCauzione } from "@/lib/cauzione";
+import FormRinnovo from "@/components/FormRinnovo";
 import {
   segnaDisdetta,
   annullaDisdetta,
@@ -43,6 +44,7 @@ const testo = {
   disdetta_inviata: "Disdetta inviata",
   in_occupazione: "Contratto scaduto: l'inquilino occupa ancora l'immobile",
   concluso: "Contratto concluso: immobile rilasciato",
+  rinnovato: "Contratto rinnovato con nuove condizioni",
 };
 
 const giorni = (n) => (n >= 0 ? `tra ${n} giorni` : `${Math.abs(n)} giorni fa`);
@@ -85,6 +87,15 @@ export default async function Scheda({ params }) {
   const s = statoScadenza(c);
   const oggi = new Date().toISOString().slice(0, 10);
   const sc = situazioneCanoni(c);
+  const successivo = c.rinnovato
+    ? await prisma.contratto.findFirst({
+        where: { precedenteId: c.id },
+        select: { id: true },
+      })
+    : null;
+  const inizioRinnovo = c.dataFine
+    ? new Date(c.dataFine.getTime() + 86400000).toISOString().slice(0, 10)
+    : "";
   const scaduto = s && s.giorniAllaScadenza < 0;
   const primoAperto = sc.righe.find((r) => r.residuo > 0.005);
   const mini =
@@ -94,6 +105,35 @@ export default async function Scheda({ params }) {
       month: "long",
       year: "numeric",
     });
+
+  const PeriodoSel = ({ def }) =>
+    sc.step > 1 ? (
+      <select
+        name="mese"
+        defaultValue={def}
+        required
+        className={mini}
+        title="Periodo di competenza"
+      >
+        {!sc.righe.some((r) => r.mese === def) && (
+          <option value={def}>{def} (fuori periodo)</option>
+        )}
+        {[...sc.righe].reverse().map((r) => (
+          <option key={r.mese} value={r.mese}>
+            {etichettaPeriodo(r, sc.step)}
+          </option>
+        ))}
+      </select>
+    ) : (
+      <input
+        type="month"
+        name="mese"
+        defaultValue={def}
+        required
+        className={mini}
+        title="Mese di competenza"
+      />
+    );
   const btn =
     "inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50";
 
@@ -112,6 +152,9 @@ export default async function Scheda({ params }) {
             {c.unita.palazzina?.nome ?? "Unità autonoma"} · {c.inquilino.nome}
           </p>
         </div>
+        <Link href={`/entrate/inquilini/${c.inquilinoId}`} className={btn}>
+          Report inquilino
+        </Link>
         <Link href={`/entrate/contratti/${c.id}/modifica`} className={btn}>
           <Pencil size={14} /> Modifica
         </Link>
@@ -124,6 +167,17 @@ export default async function Scheda({ params }) {
           >
             {testo[s.livello]}
           </span>
+          {c.precedenteId && (
+            <>
+              ·{" "}
+              <Link
+                href={`/entrate/contratti/${c.precedenteId}`}
+                className="text-indigo-600 hover:underline"
+              >
+                contratto precedente
+              </Link>
+            </>
+          )}
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
               <p className="text-xs text-gray-500">
@@ -164,6 +218,7 @@ export default async function Scheda({ params }) {
           <Dato label="Canone mensile">
             {c.canone != null && eur(c.canone)}
           </Dato>
+          <Dato label="Pagamento canone">{sc.step === 1 ? "mensile" : `ogni ${sc.step} mesi, in anticipo`}</Dato>
           <Dato label="Cedolare secca">{c.cedolare ? "Sì" : "No"}</Dato>
           <Dato label="Persone">{c.persone}</Dato>
         </dl>
@@ -232,6 +287,45 @@ export default async function Scheda({ params }) {
           </div>
         )}
       </section>
+
+      {(c.rinnovato || (c.dataFine && !c.dataRilascio)) && (
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-2 font-semibold">Rinnovo con nuove condizioni</h2>
+          {c.rinnovato ? (
+            <p className="text-sm text-gray-600">
+              Questo contratto è stato rinnovato con nuove condizioni
+              {successivo && (
+                <>
+                  {" "}
+                  —{" "}
+                  <Link
+                    href={`/entrate/contratti/${successivo.id}`}
+                    className="text-indigo-600 hover:underline"
+                  >
+                    vai al nuovo contratto
+                  </Link>
+                </>
+              )}
+              .
+            </p>
+          ) : (
+            <>
+              <p className="mb-3 text-xs text-gray-500">
+                Crea un nuovo contratto collegato a questo, con canone e durata
+                nuovi. Questo contratto resta nello storico così com'è; cauzione
+                e trattenute passano al nuovo.
+              </p>
+              <FormRinnovo
+                id={c.id}
+                canone={c.canone}
+                durata={c.rinnovoMesi ?? c.durataMesi}
+                rinnovo={c.rinnovoMesi}
+                inizio={inizioRinnovo}
+              />
+            </>
+          )}
+        </section>
+      )}
 
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h2 className="mb-3 font-semibold">Occupazione e rilascio</h2>
@@ -319,13 +413,23 @@ export default async function Scheda({ params }) {
             </p>
           </div>
           {sc.righe.some((r) => r.mese < sc.corrente && r.residuo > 0.005) && (
-            <BottoneConferma
+            <form
               action={incassaMesiMancanti.bind(null, c.id)}
-              messaggio="Registrare come incassati tutti i mesi passati ancora aperti? La data di incasso sarà il primo giorno di ogni mese (poi modificabile)."
-              className={btn}
+              className="flex items-end gap-2"
             >
-              Segna incassati i mesi passati
-            </BottoneConferma>
+              <label className="block">
+                <span className="mb-1 block text-xs text-gray-500">
+                  Segna incassati i mesi precedenti a
+                </span>
+                <input
+                  type="month"
+                  name="fino"
+                  defaultValue={sc.corrente}
+                  className={mini}
+                />
+              </label>
+              <button className={btn}>Segna incassati</button>
+            </form>
           )}
         </div>
         {dataAcq(c.unita) && dataAcq(c.unita) > c.dataInizio && (
@@ -339,7 +443,7 @@ export default async function Scheda({ params }) {
           <table className="mb-4 w-full">
             <thead className="text-left text-xs text-gray-500">
               <tr>
-                <th className="pb-2">Mese</th>
+                <th className="pb-2">Periodo</th>
                 <th className="text-right">Dovuto</th>
                 <th className="text-right">Incassato</th>
                 <th className="text-right">Residuo</th>
@@ -349,7 +453,9 @@ export default async function Scheda({ params }) {
             <tbody>
               {[...sc.righe].reverse().map((r) => (
                 <tr key={r.mese} className="border-t border-gray-100 text-sm">
-                  <td className="py-2 capitalize">{meseIt(r.mese)}</td>
+                  <td className="py-2 capitalize">
+                    {etichettaPeriodo(r, sc.step)}
+                  </td>
                   <td className="text-right">{eur(r.atteso)}</td>
                   <td className="text-right">{eur(r.incassato)}</td>
                   <td className="text-right">{eur(Math.max(r.residuo, 0))}</td>
@@ -375,49 +481,54 @@ export default async function Scheda({ params }) {
               Nessun pagamento registrato.
             </p>
           )}
-          {c.canoni.map((p) => (
-            <div key={p.id} className="flex items-center gap-2">
-              <form
-                action={aggiornaCanone.bind(null, p.id, c.id)}
-                className="flex flex-wrap items-center gap-2"
-              >
-                <input
-                  type="month"
-                  name="mese"
-                  defaultValue={p.mese}
-                  required
-                  className={mini}
-                  title="Mese di competenza"
-                />
-                <input
-                  type="date"
-                  name="data"
-                  defaultValue={p.data.toISOString().slice(0, 10)}
-                  required
-                  className={mini}
-                  title="Data di incasso"
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  name="importo"
-                  defaultValue={p.importo}
-                  required
-                  className={`${mini} w-28`}
-                />
-                <button
-                  className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100"
-                  title="Salva modifica"
+          {c.canoni.map((p) =>
+            p.versamentoId ? (
+              <p key={p.id} className="text-sm text-gray-500">
+                {p.mese} · {dataIt(p.data)} · {eur(p.importo)} · da versamento{" "}
+                <Link
+                  href={`/entrate/inquilini/${c.inquilinoId}`}
+                  className="text-indigo-600 hover:underline"
                 >
-                  <Check size={16} />
-                </button>
-              </form>
-              <BottoneElimina
-                action={eliminaCanone.bind(null, p.id, c.id)}
-                messaggio="Eliminare questo pagamento?"
-              />
-            </div>
-          ))}
+                  (vedi report)
+                </Link>
+              </p>
+            ) : (
+              <div key={p.id} className="flex items-center gap-2">
+                <form
+                  action={aggiornaCanone.bind(null, p.id, c.id)}
+                  className="flex flex-wrap items-center gap-2"
+                >
+                  <PeriodoSel def={p.mese} />
+                  <input
+                    type="date"
+                    name="data"
+                    defaultValue={p.data.toISOString().slice(0, 10)}
+                    required
+                    className={mini}
+                    title="Data di incasso"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="importo"
+                    defaultValue={p.importo}
+                    required
+                    className={`${mini} w-28`}
+                  />
+                  <button
+                    className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100"
+                    title="Salva modifica"
+                  >
+                    <Check size={16} />
+                  </button>
+                </form>
+                <BottoneElimina
+                  action={eliminaCanone.bind(null, p.id, c.id)}
+                  messaggio="Eliminare questo pagamento?"
+                />
+              </div>
+            ),
+          )}
         </div>
 
         <form
@@ -428,25 +539,28 @@ export default async function Scheda({ params }) {
             <span className="mb-1 block text-xs text-gray-500">
               Mese di competenza
             </span>
-            <input
-              type="month"
-              name="mese"
-              defaultValue={(primoAperto ?? { mese: sc.corrente }).mese}
-              required
-              className={mini}
-            />
+            <PeriodoSel def={(primoAperto ?? { mese: sc.corrente }).mese} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-gray-500">
-              Data di incasso
+              Segna incassati i {sc.step > 1 ? "periodi" : "mesi"} precedenti a
             </span>
-            <input
-              type="date"
-              name="data"
-              defaultValue={oggi}
-              required
-              className={mini}
-            />
+            {sc.step > 1 ? (
+              <select name="fino" defaultValue={sc.corrente} className={mini}>
+                {sc.righe.map((r) => (
+                  <option key={r.mese} value={r.mese}>
+                    {etichettaPeriodo(r, sc.step)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="month"
+                name="fino"
+                defaultValue={sc.corrente}
+                className={mini}
+              />
+            )}
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-gray-500">
@@ -463,7 +577,7 @@ export default async function Scheda({ params }) {
               }
             />
           </label>
-          <button className={btn}>Registra incasso</button>
+          <button className={btn}>Registra</button>
         </form>
       </section>
 

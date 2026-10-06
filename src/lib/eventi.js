@@ -51,7 +51,7 @@ export async function eventiCalendario() {
   });
   for (const c of contratti) {
     const s = statoScadenza(c);
-    if (!s || s.giorniAllaScadenza < 0 || s.livello === "concluso") continue;
+    if (!s || s.giorniAllaScadenza < 0 || s.livello === "concluso" || s.livello === "rinnovato") continue;
     const chi = `${c.unita.nome} (${c.inquilino.nome})`;
     const link = `/entrate/contratti/${c.id}`;
 

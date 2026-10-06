@@ -24,7 +24,7 @@ export default async function Entrate({ searchParams }) {
   });
 
   const totaleCanoni = contratti
-    .filter((c) => !(c.dataRilascio && c.dataRilascio <= new Date()))
+    .filter((c) => !c.rinnovato && !(c.dataRilascio && c.dataRilascio <= new Date()))
     .reduce((t, c) => t + (c.canone ?? 0), 0);
 
   const cauzioni = contratti
@@ -115,7 +115,7 @@ export default async function Entrate({ searchParams }) {
                       </div>
                     </td>
                     <td className="pr-4">
-                      {c.inquilino.nome}
+                      <Link href={`/entrate/inquilini/${c.inquilinoId}`} className="hover:underline">{c.inquilino.nome}</Link>
                       {c.inquilino.tipo === "SOCIETA" && (
                         <span className="ml-1 text-xs text-gray-500">
                           (società)

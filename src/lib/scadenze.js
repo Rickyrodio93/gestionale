@@ -34,7 +34,8 @@ export function statoScadenza(c) {
     const gLimite = giorniA(limite);
 
     let livello = "ok";
-    if (c.dataRilascio && c.dataRilascio <= new Date()) livello = "concluso";
+      if (c.rinnovato) livello = "rinnovato";
+  else if (c.dataRilascio && c.dataRilascio <= new Date()) livello = "concluso";
     else if (c.inOccupazione && gScad < 0) livello = "in_occupazione";
     else if (gScad < 0) livello = "scaduto";
     else if (c.disdettaInviataIl) livello = "disdetta_inviata";
@@ -54,6 +55,7 @@ export function etichetta(s) {
         concluso: "concluso",
         scaduto: "scaduto",
         disdetta_inviata: "disdetta inviata",
+        rinnovato: "rinnovato"
     };
     return fisse[s.livello] ?? `disdetta entro ${dataIt(s.limite)}`;
 }
@@ -72,4 +74,5 @@ export const coloriScadenza = {
     disdetta_inviata: "bg-gray-200 text-gray-700",
     in_occupazione: "bg-orange-100 text-orange-800",
     concluso: "bg-gray-100 text-gray-500",
+    rinnovato: "bg-gray-100 text-gray-500"
 };

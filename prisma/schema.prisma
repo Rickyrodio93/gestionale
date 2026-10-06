@@ -85,6 +85,12 @@ enum Frequenza {
   ANNUALE
 }
 
+enum DestinazioneVersamento {
+  AUTO
+  CANONI
+  BOLLETTE
+}
+
 model Palazzina {
   id             Int               @id @default(autoincrement())
   nome           String
@@ -169,13 +175,14 @@ model DatiCatastali {
 }
 
 model Inquilino {
-  id        Int           @id @default(autoincrement())
-  nome      String
-  tipo      TipoInquilino @default(PERSONA)
-  email     String?
-  telefono  String?
-  cfPiva    String?
-  contratti Contratto[]
+  id         Int           @id @default(autoincrement())
+  nome       String
+  tipo       TipoInquilino @default(PERSONA)
+  email      String?
+  telefono   String?
+  cfPiva     String?
+  contratti  Contratto[]
+  versamenti Versamento[]
 }
 
 model Contratto {
@@ -206,6 +213,11 @@ model Contratto {
   cauzioneRestituitaIl DateTime? // valorizzata = cauzione liquidata
   cauzioneRestituita   Float? // importo restituito all'inquilino
   trattenute           TrattenutaCauzione[]
+  rinnovato            Boolean              @default(false)
+  precedenteId         Int?
+  addebiti             Addebito[]
+  periodicitaMesi      Int                  @default(1)
+  ancoraPeriodi        DateTime?
 }
 
 // Contatore generale della palazzina (unitaId nullo) o divisionale di un'unità
@@ -266,12 +278,14 @@ model Quota {
 }
 
 model Pagamento {
-  id         Int      @id @default(autoincrement())
-  quota      Quota    @relation(fields: [quotaId], references: [id], onDelete: Cascade)
-  quotaId    Int
-  data       DateTime
-  importo    Float
-  daCauzione Boolean  @default(false)
+  id           Int         @id @default(autoincrement())
+  quota        Quota       @relation(fields: [quotaId], references: [id], onDelete: Cascade)
+  quotaId      Int
+  data         DateTime
+  importo      Float
+  daCauzione   Boolean     @default(false)
+  versamento   Versamento? @relation(fields: [versamentoId], references: [id], onDelete: Cascade)
+  versamentoId Int?
 }
 
 model Prenotazione {
@@ -329,14 +343,16 @@ model Spesa {
 }
 
 model PagamentoCanone {
-  id          Int       @id @default(autoincrement())
-  contratto   Contratto @relation(fields: [contrattoId], references: [id], onDelete: Cascade)
-  contrattoId Int
-  mese        String // competenza, es. "2026-10"
-  data        DateTime // data di incasso
-  importo     Float
-  note        String?
-  daCauzione  Boolean   @default(false)
+  id           Int         @id @default(autoincrement())
+  contratto    Contratto   @relation(fields: [contrattoId], references: [id], onDelete: Cascade)
+  contrattoId  Int
+  mese         String // competenza, es. "2026-10"
+  data         DateTime // data di incasso
+  importo      Float
+  note         String?
+  daCauzione   Boolean     @default(false)
+  versamento   Versamento? @relation(fields: [versamentoId], references: [id], onDelete: Cascade)
+  versamentoId Int?
 }
 
 model SpesaRicorrente {
@@ -364,4 +380,39 @@ model TrattenutaCauzione {
   descrizione String
   importo     Float
   applicato   Float? // importo effettivamente trattenuto alla liquidazione
+}
+
+model Versamento {
+  id           Int                    @id @default(autoincrement())
+  inquilino    Inquilino              @relation(fields: [inquilinoId], references: [id], onDelete: Cascade)
+  inquilinoId  Int
+  unitaId      Int? // vuoto = tutte le unità dell'inquilino
+  data         DateTime
+  importo      Float
+  destinazione DestinazioneVersamento @default(AUTO)
+  note         String?
+  canoni       PagamentoCanone[]
+  pagamenti    Pagamento[]
+  pagAddebiti  PagamentoAddebito[]
+}
+
+// spese a carico dell'inquilino: raccomandata, marca da bollo, penali…
+model Addebito {
+  id          Int                 @id @default(autoincrement())
+  contratto   Contratto           @relation(fields: [contrattoId], references: [id], onDelete: Cascade)
+  contrattoId Int
+  data        DateTime
+  descrizione String
+  importo     Float
+  pagamenti   PagamentoAddebito[]
+}
+
+model PagamentoAddebito {
+  id           Int         @id @default(autoincrement())
+  addebito     Addebito    @relation(fields: [addebitoId], references: [id], onDelete: Cascade)
+  addebitoId   Int
+  versamento   Versamento? @relation(fields: [versamentoId], references: [id], onDelete: Cascade)
+  versamentoId Int?
+  data         DateTime
+  importo      Float
 }

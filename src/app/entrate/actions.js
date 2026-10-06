@@ -51,6 +51,8 @@ async function leggiContratto(fd) {
             cedolare: fd.get("cedolare") === "on",
             cauzione: num(fd.get("cauzione")),
             cauzioneVersataIl: fd.get("cauzioneVersataIl") ? new Date(fd.get("cauzioneVersataIl")) : null,
+            periodicitaMesi: num(fd.get("periodicitaMesi")) ?? 1,
+            ancoraPeriodi: fd.get("ancoraPeriodi") ? new Date(fd.get("ancoraPeriodi")) : null,
         },
     };
 }
@@ -118,7 +120,7 @@ export async function annullaDisdetta(id) {
 
 export async function rinnovaContratto(id) {
     const c = await prisma.contratto.findUnique({ where: { id } });
-    if (!c?.dataFine || !c.rinnovoMesi) return;
+    if (!c?.dataFine || !c.rinnovoMesi || c.rinnovato) return;
     await prisma.contratto.update({
         where: { id },
         data: {
@@ -213,17 +215,18 @@ export async function eliminaCanone(id, contrattoId) {
 }
 
 // segna come incassati i mesi passati ancora aperti (data = primo del mese, poi modificabile)
-export async function incassaMesiMancanti(contrattoId) {
+export async function incassaMesiMancanti(contrattoId, fd) {
     const c = await prisma.contratto.findUnique({
         where: { id: contrattoId },
         include: { canoni: true, unita: { include: { palazzina: true } } },
     });
     if (!c) return;
     const sc = situazioneCanoni(c);
-    const da = sc.righe.filter((r) => r.mese < sc.corrente && r.residuo > 0.005);
+    const fino = fd?.get("fino") || sc.corrente; // segna incassati i mesi precedenti a questo
+    const da = sc.righe.filter((r) => r.mese < fino && r.residuo > 0.005);
     if (!da.length) return;
     await prisma.pagamentoCanone.createMany({
-        data: da.map((r) => ({ contrattoId, mese: r.mese, data: new Date(`${r.mese}-01`), importo: r.residuo })),
+            data: da.map((r) => ({ contrattoId, mese: r.mese, data: r.dal ?? new Date(`${r.mese}-01`), importo: r.residuo })),
     });
     aggiorna(contrattoId);
 }
@@ -315,4 +318,55 @@ export async function annullaLiquidazione(id) {
     ]);
     aggiorna(id);
     revalidatePath("/spese/bollette");
+}
+
+export async function rinnovaConCondizioni(id, _prev, fd) {
+    const c = await prisma.contratto.findUnique({ where: { id } });
+    if (!c?.dataFine) return { error: "Il contratto non ha una data di scadenza." };
+    if (c.rinnovato) return { error: "Questo contratto è già stato rinnovato." };
+
+    const canone = num(fd.get("canone"));
+    const durataMesi = num(fd.get("durataMesi"));
+    if (!canone || !durataMesi) return { error: "Inserisci il nuovo canone e la durata." };
+
+    const inizio = fd.get("dataInizio") ? new Date(fd.get("dataInizio")) : new Date(c.dataFine.getTime() + 86400000);
+    const fine = fineContratto(inizio, durataMesi);
+    const portaCauzione = c.cauzione != null && !c.cauzioneRestituitaIl;
+
+    const nuovo = await prisma.$transaction(async (tx) => {
+        const n = await tx.contratto.create({
+            data: {
+                unitaId: c.unitaId,
+                inquilinoId: c.inquilinoId,
+                tipo: "LUNGO",
+                modalita: c.modalita,
+                dataInizio: inizio,
+                dataFine: fine,
+                durataMesi,
+                rinnovoMesi: num(fd.get("rinnovoMesi")),
+                preavvisoMesi: c.preavvisoMesi,
+                canone,
+                persone: c.persone,
+                cedolare: c.cedolare,
+                precedenteId: c.id,
+                periodicitaMesi: c.periodicitaMesi, ancoraPeriodi: c.ancoraPeriodi,
+                ...(portaCauzione && { cauzione: c.cauzione, cauzioneVersataIl: c.cauzioneVersataIl }),
+            },
+        });
+        if (portaCauzione) await tx.trattenutaCauzione.updateMany({ where: { contrattoId: id }, data: { contrattoId: n.id } });
+        await tx.contratto.update({
+            where: { id },
+            data: {
+                rinnovato: true,
+                inOccupazione: false,
+                disdettaInviataIl: null,
+                disdettaNote: null,
+                ...(portaCauzione && { cauzione: null, cauzioneVersataIl: null }),
+            },
+        });
+        return n;
+    });
+
+    aggiorna(id);
+    redirect(`/entrate/contratti/${nuovo.id}`);
 }

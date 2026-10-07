@@ -1,5 +1,5 @@
 "use client";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
   creaRicorrente,
   aggiornaRicorrente,
@@ -15,6 +15,7 @@ export default function FormRicorrente({ unita, palazzine, ricorrente }) {
     ricorrente ? aggiornaRicorrente.bind(null, ricorrente.id) : creaRicorrente,
     null,
   );
+  const [cat, setCat] = useState(ricorrente?.categoria ?? "ALTRO");
   const dest = ricorrente
     ? ricorrente.unitaId
       ? `unita:${ricorrente.unitaId}`
@@ -52,7 +53,8 @@ export default function FormRicorrente({ unita, palazzine, ricorrente }) {
           </span>
           <select
             name="categoria"
-            defaultValue={ricorrente?.categoria ?? "ALTRO"}
+            value={cat}
+            onChange={(e) => setCat(e.target.value)}
             className={inputCls}
           >
             {Object.entries(CATEGORIE).map(([k, v]) => (
@@ -99,6 +101,18 @@ export default function FormRicorrente({ unita, palazzine, ricorrente }) {
           step: "0.01",
           def: ricorrente?.importo,
         })}
+        {cat === "MUTUO" && (
+          <>
+            <p className="text-xs text-gray-500 sm:col-span-2">
+              Se il prestito ha finanziato dei lavori, indica qui la parte spesa
+              (es. 30.000 €). La pagina Investimenti la conta come capitale
+              investito. <b>Non registrarla anche come spesa</b>, altrimenti
+              viene conteggiata due volte.
+            </p>
+            {C("Importo del prestito usato per i lavori (€)", "capitaleLavori",{type: "nuber", step: "0.01", def: ricorrente?.capitaleLavori})}
+            {C("Data di erogazione" ,"dataErogazione", {type: "date", def: iso(ricorrente?.dataErogazione)})}
+          </>
+        )}
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-gray-600">
             Frequenza

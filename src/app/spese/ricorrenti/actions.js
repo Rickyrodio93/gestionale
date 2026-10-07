@@ -15,6 +15,10 @@ function leggi(fd) {
     if (!descrizione || importo == null || !id || !["unita", "palazzina"].includes(tipo))
         return { error: "Compila descrizione, a cosa si riferisce e importo." };
     const al = fd.get("al") ? new Date(fd.get("al")) : null;
+    const mutuo = fd.get("categoria") === "MUTUO";
+    const capitaleLavori = mutuo ? num(fd.get("capitaleLavori")) : null;
+    const dataErogazione = mutuo && fd.get("dataErogazione") ? new Date(fd.get("dataErogazione")) : null;
+    if (capitaleLavori && !dataErogazione) return { error: "Indica la data di erogazione del prestito." };
     return {
         dati: {
             categoria: fd.get("categoria"),

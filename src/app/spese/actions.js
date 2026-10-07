@@ -47,6 +47,8 @@ export async function aggiornaSpesa(id, _prev, fd) {
 }
 
 export async function eliminaSpesa(id) {
+  const s = await prisma.spesa.findUnique({ where: { id }, select: { rataId: true } });
+  if (!s || s.rataId) return; // le spese delle rate si gestiscono dalla dilazione
   await prisma.spesa.delete({ where: { id } });
   revalidatePath("/spese");
 }

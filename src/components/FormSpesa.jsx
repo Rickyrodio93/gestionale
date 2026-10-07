@@ -6,11 +6,12 @@ import { inputCls } from "@/lib/ui";
 
 const iso = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 
-export default function FormSpesa({ unita, palazzine, spesa }) {
+export default function FormSpesa({ unita, palazzine, spesa,iniziale }) {
   const [state, action, pending] = useActionState(
     spesa ? aggiornaSpesa.bind(null, spesa.id) : creaSpesa,
     null,
   );
+  const v = spesa ?? iniziale;
 
   const dest = spesa
     ? spesa.unitaId
@@ -43,7 +44,7 @@ export default function FormSpesa({ unita, palazzine, spesa }) {
           </span>
           <select
             name="categoria"
-            defaultValue={spesa?.categoria ?? "IMU"}
+            defaultValue={v?.categoria ?? "IMU"}
             className={inputCls}
           >
             {Object.entries(CATEGORIE).map(([k, v]) => (
@@ -93,18 +94,18 @@ export default function FormSpesa({ unita, palazzine, spesa }) {
         })}
         {C("Anno di competenza (vuoto = anno della data)", "anno", {
           type: "number",
-          def: spesa?.anno,
+          def: v?.anno,
         })}
         {C("Importo (€)", "importo", {
           type: "number",
           step: "0.01",
-          def: spesa?.importo,
+          def: v?.importo,
         })}
         {C("Fornitore / beneficiario", "fornitore", { def: spesa?.fornitore })}
         <div className="sm:col-span-2">
           {C("Descrizione", "descrizione", {
             placeholder: "es. Acconto IMU 2026, rifacimento bagno…",
-            def: spesa?.descrizione,
+            def: v?.descrizione,
           })}
         </div>
         <div className="sm:col-span-2">

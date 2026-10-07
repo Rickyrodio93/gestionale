@@ -19,8 +19,14 @@ export async function salvaAcquistoVendita(tipo, id, _prev, fd) {
         dataVendita: dt(fd, "dataVendita"),
         prezzoVendita: num(fd.get("prezzoVendita")),
         costiVendita: num(fd.get("costiVendita")),
+        inizioMisura: dt(fd, "inizioMisura"),
+        valoreIniziale: num(fd.get("valoreIniziale")),
     };
+    if ((dati.inizioMisura == null) !== (dati.valoreIniziale == null))
+        return { error: "Data di partenza e valore iniziale vanno inseriti insieme, oppure lasciati entrambi vuoti." };
+
     if (dati.dataVendita && dati.prezzoVendita == null) return { error: "Per registrare la vendita indica anche il prezzo." };
+
     if (dati.dataVendita && dati.dataAcquisto && dati.dataVendita < dati.dataAcquisto)
         return { error: "La data di vendita è precedente a quella di acquisto." };
 

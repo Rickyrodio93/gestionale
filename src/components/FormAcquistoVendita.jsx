@@ -31,6 +31,22 @@ export default function FormAcquistoVendita({ tipo, id, ent }) {
   return (
     <form action={action} className="max-w-4xl space-y-5">
       <section className={card}>
+        <h2 className="mb-1 font-semibold">Base di partenza (opzionale)</h2>
+        <p className="mb-4 text-xs text-gray-500">
+          Per un immobile posseduto da tempo, o con cambio di destinazione:
+          indica da quando misurare il rendimento e quanto valeva l'immobile in
+          quel momento. Se compilata, sostituisce il prezzo di acquisto nel
+          calcolo. Usa la data di inizio dei lavori (o una precedente): le spese
+          di ristrutturazione registrate da lì in poi contano come capitale
+          investito.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {F("Misura il rendimento dal", "inizioMisura", iso(ent.inizioMisura), "date")}
+          {F("Valore dell'immobile a quella data (€)", "valoreIniziale", ent.valoreIniziale)}
+        </div>
+      </section>
+
+      <section className={card}>
         <h2 className="mb-4 font-semibold">Acquisto</h2>
         <div className="grid gap-4 sm:grid-cols-3">
           {F("Data acquisto", "dataAcquisto", iso(ent.dataAcquisto), "date")}

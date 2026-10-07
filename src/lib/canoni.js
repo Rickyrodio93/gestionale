@@ -53,7 +53,7 @@ export function mesiAttesi(c, oggi = new Date()) {
       const a = Math.min(end, fine);
       if (a >= da) {
         const f = Math.min(giorni(da, a) / giorni(start, end), 1);
-        out.push({ mese: chiave(y, m), dal: new Date(start), al: new Date(end), atteso: r2(c.canone * f) });
+        out.push({ mese: chiave(y, m), dal: new Date(start), al: new Date(end), da: new Date(da), a: new Date(a), atteso: r2(c.canone * f) });
       }
       m++;
       if (m > 11) { m = 0; y++; }
@@ -72,7 +72,7 @@ export function mesiAttesi(c, oggi = new Date()) {
     if (da > oggi.getTime() || dal.getTime() > fine) break;
     if (a >= da) {
       const f = Math.min(giorni(da, a) / giorni(dal.getTime(), al.getTime()), 1);
-      out.push({ mese: chiaveData(dal), dal, al, atteso: r2(c.canone * step * f) });
+      out.push({ mese: chiaveData(dal), dal, al, da: new Date(da), a: new Date(a), atteso: r2(c.canone * step * f) });
     }
     k++;
   }

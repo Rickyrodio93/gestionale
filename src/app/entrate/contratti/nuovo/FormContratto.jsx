@@ -51,6 +51,7 @@ export default function FormContratto({ unita, inquilini, contratto }) {
   const [rinnovo, setRinnovo] = useState(contratto?.rinnovoMesi ?? 48);
   const [per, setPer] = useState(contratto?.periodicitaMesi ?? 1);
   const [can, setCan] = useState(contratto?.canone ?? "");
+  const [ced, setCed] = useState(contratto?.cedolare ?? false);
 
   return (
     <form action={action} className="max-w-5xl space-y-5">
@@ -219,10 +220,17 @@ export default function FormContratto({ unita, inquilini, contratto }) {
           <input
             type="checkbox"
             name="cedolare"
-            defaultChecked={contratto?.cedolare}
+            checked={ced}
+            onChange={(e) => setCed(e.target.value)}
           />{" "}
           Cedolare secca
         </label>
+        {ced && C("Aliquota cedolare (%)", "aliquotaCedolare", {type: "number", step: "0.01", def: contratto?.aliquotaCedolare ?? 21})}
+        {ced && (
+          <p className="text-xs text-gray-500 sm:col-span-2 lg:col-span-3">
+            21% per il canone libero; 10% solo per il canone concordato nei comuni ad alta tensione abitativa e con i requisiti previsti.
+          </p>
+        )}
       </Sezione>
 
       {state?.error && (

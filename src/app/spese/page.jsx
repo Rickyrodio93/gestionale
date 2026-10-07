@@ -7,6 +7,7 @@ import { CATEGORIE } from "@/lib/spese";
 import BottoneElimina from "@/components/BottoneElimina";
 import { eliminaSpesa } from "./actions";
 import { sincronizzaRicorrenti } from "@/lib/ricorrenti";
+import { pianoCedolare } from "@/lib/cedolare";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,11 @@ export default async function Spese({ searchParams }) {
   await sincronizzaRicorrenti();
 
   const tutte = await prisma.spesa.findMany({
-    include: { unita: { include: { palazzina: true } }, palazzina: true },
+    include: {
+      unita: { include: { palazzina: true } },
+      palazzina: true,
+      rata: { select: { dilazioneId: true } },
+    },
     orderBy: { data: "desc" },
   });
 
@@ -39,8 +44,9 @@ export default async function Spese({ searchParams }) {
   const perPalazzina = {};
   for (const s of delPeriodo) {
     const nome =
-      s.palazzina?.nome ?? s.unita?.palazzina?.nome ?? "Unità autonome";
-    perPalazzina[nome] = (perPalazzina[nome] ?? 0) + s.importo;
+      s.palazzina?.nome ??
+      s.unita?.palazzina?.nome ??
+      (s.unita ? "Unità autonome" : "Generale");
   }
 
   // stima IMU vs versato (solo con un anno selezionato)
@@ -56,6 +62,10 @@ export default async function Spese({ searchParams }) {
     const versato = somma(delPeriodo.filter((s) => s.categoria === "IMU"));
     imu = { stima, versato, senzaAliquota };
   }
+
+  const piano = sel !== "tutti" ? await pianoCedolare(Number(sel)) : null;
+  const regLink = (r, anno) =>
+    `/spese/nuova?categoria=CEDOLARE&anno=${anno}&importo=${Math.abs(r.importo).toFixed(2)}&descrizione=${encodeURIComponent(`Cedolare secca ${anno} — ${r.titolo}`)}`;
 
   const link = (a, c) => `/spese?anno=${a}&cat=${c}`;
   const chip = (attivo) =>
@@ -82,6 +92,13 @@ export default async function Spese({ searchParams }) {
           >
             Ricorrenti
           </Link>
+          <Link
+            href="/spese/dilazioni"
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm fonte-medium hover:bg-gray-50"
+          >
+            Dilazioni
+          </Link>
+
           <Link
             href="/spese/nuova"
             className="flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
@@ -134,6 +151,131 @@ export default async function Spese({ searchParams }) {
               vendite in corso d&apos;anno.
               {imu.senzaAliquota > 0 &&
                 ` ${imu.senzaAliquota} unità con catasto ma senza aliquota IMU non sono incluse.`}
+            </p>
+          </section>
+        )}
+
+        {piano && piano.righe.length > 0 && (
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-1 font-semibold">Cedolare secca {sel}</h2>
+            <p className="mb-3 text-xs text-gray-500">
+              Stima sui canoni di competenza dell'anno, per i contratti con la
+              cedolare attiva. Indicativa: la base ufficiale è la dichiarazione.
+            </p>
+
+            <table className="w-full">
+              <thead className="text-left text-xs text-gray-500">
+                <tr>
+                  <th className="pb-2">Contratto</th>
+                  <th className="text-right">Canone di competenza</th>
+                  <th className="text-right">Aliquota</th>
+                  <th className="text-right">Imposta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {piano.righe.map((x) => (
+                  <tr key={x.id} className="border-t border-gray-100 text-sm">
+                    <td className="py-2">
+                      <Link
+                        href={`/entrate/contratti/${x.id}`}
+                        className="hover:underline"
+                      >
+                        {x.unita}
+                      </Link>
+                      <div className="text-xs text-gray-500">{x.inquilino}</div>
+                    </td>
+                    <td className="text-right">{eur(x.base)}</td>
+                    <td className="text-right">{x.aliquota}%</td>
+                    <td className="text-right">{eur(x.imposta)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-gray-300 text-sm font-semibold">
+                  <td className="pt-2">Imposta stimata {sel}</td>
+                  <td className="pt-2 text-right">{eur(piano.base)}</td>
+                  <td />
+                  <td className="pt-2 text-right">{eur(piano.imposta)}</td>
+                </tr>
+              </tfoot>
+            </table>
+
+            {piano.occupazione > 0 && (
+              <p className="mt-2 text-xs text-amber-700">
+                Esclusi {eur(piano.occupazione)} di indennità di occupazione
+                oltre la scadenza dei contratti: verifica il trattamento con il
+                commercialista.
+              </p>
+            )}
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-4">
+              <div>
+                <p className="text-xs text-gray-500">Imposta {sel}</p>
+                <p className="font-semibold">{eur(piano.imposta)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">
+                  Già versato (anno di competenza {sel})
+                </p>
+                <p className="font-semibold">{eur(piano.versato)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">In dilazione</p>
+                <p className="font-semibold">{eur(piano.dilazionata)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Ancora da versare</p>
+                <p className="font-semibold">
+                  {eur(Math.max(piano.residuo, 0))}
+                </p>
+              </div>
+            </div>
+
+            <h3 className="mb-2 mt-5 text-xs font-medium text-gray-600">
+              Piano dei versamenti
+            </h3>
+            <ul className="space-y-2">
+              {piano.rate.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                >
+                  <span>
+                    {r.titolo} · entro il {dataIt(r.scadenza)}{" "}
+                    <span className="text-xs text-gray-500">
+                      (codice {r.codice})
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <b>{eur(Math.abs(r.importo))}</b>
+                    {r.importo > 0 && (
+                      <Link
+                        href={regLink(r, piano.anno)}
+                        className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium hover:bg-gray-50"
+                      >
+                        Registra versamento
+                      </Link>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-gray-500">
+              Gli acconti si calcolano sull'imposta stimata dell'anno precedente
+              ({eur(piano.acconto)})
+              {piano.primoAnno &&
+                ": se è il primo anno di cedolare non sono dovuti"}
+              . Nel registrare il versamento scegli la palazzina o l'unità
+              principale: il totale per categoria non cambia. L'anno di
+              competenza è già compilato, anche per il saldo che si paga l'anno
+              dopo.
+            </p>
+
+            <p className="mt-3 text-xs text-gray-500">
+              Non hai versato entro la scadenza e ti hanno proposto una
+              rateizzazione? <Link href={`/spese/dilazioni/nuova?anno=${piano.anno}&importo=${Math.max(piano.residuo, 0).toFixed(2)}`} className="text-indigo-600 hover:underline">Crea dilazione</Link>: l'imposta
+              coperta dal piano esce dal «da versare» e le rate che paghi
+              finiscono nelle spese.{" "}
             </p>
           </section>
         )}
@@ -201,9 +343,11 @@ export default async function Spese({ searchParams }) {
                         </>
                       ) : (
                         <>
-                          {s.palazzina.nome}
+                          {s.palazzina?.nome ?? "Generale"}
                           <div className="text-xs text-gray-500">
-                            intera palazzina
+                            {s.palazzina
+                              ? "intera palazzina"
+                              : "non legata a un immobile"}
                           </div>
                         </>
                       )}
@@ -227,17 +371,28 @@ export default async function Spese({ searchParams }) {
                     <td className="text-right">{eur(s.importo)}</td>
                     <td className="pl-2">
                       <div className="flex justify-end gap-1">
-                        <Link
-                          href={`/spese/${s.id}/modifica`}
-                          className="inline-flex rounded-md p-1.5 text-gray-500 hover:bg-gray-100"
-                          title="Modifica"
-                        >
-                          <Pencil size={16} />
-                        </Link>
-                        <BottoneElimina
-                          action={eliminaSpesa.bind(null, s.id)}
-                          messaggio="Eliminare questa spesa?"
-                        />
+                        {s.rata ? (
+                          <Link
+                            href={`/spese/dilazioni/${s.rata.dilazioneId}`}
+                            className="text-xs text-indigo-600 hover:underline"
+                          >
+                            dilazione
+                          </Link>
+                        ) : (
+                          <>
+                            <Link
+                              href={`/spese/${s.id}/modifica`}
+                              className="inline-flex rounded-md p-1.5 text-gray-500 hover:bg-gray-100"
+                              title="Modifica"
+                            >
+                              <Pencil size={16} />
+                            </Link>
+                            <BottoneElimina
+                              action={eliminaSpesa.bind(null, s.id)}
+                              messaggio="Eliminare questa spesa?"
+                            />
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

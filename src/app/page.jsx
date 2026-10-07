@@ -22,6 +22,8 @@ import { coloriScadenza, statoScadenza } from "@/lib/scadenze";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { etichetta } from "@/lib/scadenze";
+import { stimaCedolare } from "@/lib/cedolare";
+import { dilazioni, interessiPagati } from "@/lib/cedolare";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +115,16 @@ export default async function Dashboard({ searchParams }) {
 
   // categorie
   const uSel = perCategoria(movs, anno, fino, "uscita");
+  // cedolare: maturata fino al periodo mostrato e stima dell'intero anno
+  const fineMese = Date.UTC(anno, fino, 0);
+  const cedMat = await stimaCedolare(anno, { fino: fineMese });
+  const cedAnno = await stimaCedolare(anno);
+  const cedolarePagata = uSel.CEDOLARE ?? 0;
+  const interessi = await interessiPagati(anno, fineMese);
+  const dilAperte = (await dilazioni()).reduce((t, d) => t + d.residuo, 0);
+  const risCompetenza = r2(
+    tot.risultato + cedolarePagata - cedMat.imposta - interessi,
+  );
   const uPrev = perCategoria(movs, prev, fino, "uscita");
   const categorie = Object.keys(CAT_USCITE)
     .filter((k) => uSel[k] || uPrev[k])
@@ -212,6 +224,7 @@ export default async function Dashboard({ searchParams }) {
               </p>
             </div>
           </div>
+
           <div className="text-right text-sm text-gray-700">
             {haPrev ? (
               <>
@@ -234,18 +247,30 @@ export default async function Dashboard({ searchParams }) {
                 Nessun dato del {prev} per il confronto
               </p>
             )}
+            {(cedMat.imposta > 0 || cedolarePagata > 0) && (
+              <p className="mt-2 text-xs text-gray-600">
+                Per competenza (cedolare maturata ≈ {eur(cedMat.imposta)}):{" "}
+                <b
+                  className={
+                    risCompetenza >= 0 ? "text-green-700" : "text-red-700"
+                  }
+                >
+                  {eur(risCompetenza)}
+                </b>
+              </p>
+            )}
+            {interessi > 0 && <span> (inclusi ${eur(interessi)} di interessi e sanzioni pagati)</span>}
           </div>
         </section>
 
         {/* indicatori */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <Kpi
             label="Entrate"
             value={eur(tot.entrate)}
             sub={`Lunghi ${eur(eSel.LUNGHI ?? 0)} · Brevi ${eur(eSel.BREVI ?? 0)} ${eSel.TRATTENUTE ? `· Trattenute ${eur(eSel.TRATTENUTE)}` : ""}`}
           >
             <Delta cur={tot.entrate} prev={totPrev.entrate} anno={prev} />
-
           </Kpi>
           <Kpi label="Uscite" value={eur(tot.uscite)}>
             <Delta cur={tot.uscite} prev={totPrev.uscite} invert anno={prev} />
@@ -275,6 +300,28 @@ export default async function Dashboard({ searchParams }) {
               Vedi contratti
             </Link>
           </Kpi>
+          {(cedAnno.righe.length > 0 || dilAperte > 0) && (
+            <Kpi
+              label={`Cedolare secca ${anno}`}
+              value={eur(cedAnno.imposta)}
+              sub={`versata ${eur(cedAnno.versato)} · in dilazione ${eur(cedAnno.dilazionata)} · da versare ${eur(Math.max(cedAnno.residuo, 0))}`}
+            >
+              <Link
+                href={`/spese?anno=${anno}`}
+                className="text-xs text-indigo-600 hover:underline"
+              >
+                Vedi calcolo
+              </Link>
+              {dilAperte > 0 && (
+                <Link
+                  href="/spese/dilazioni"
+                  className="ml-3 text-xs text-red-700 hover:underline"
+                >
+                  Rate da pagare: {eur(dilAperte)}
+                </Link>
+              )}
+            </Kpi>
+          )}
         </div>
 
         {/* grafici */}

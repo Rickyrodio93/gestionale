@@ -5,6 +5,7 @@ import { CATEGORIE } from "@/lib/spese";
 import { FREQ, occorrenzeFuture, sincronizzaRicorrenti } from "@/lib/ricorrenti";
 import { imuStimata } from "@/lib/imu";
 import { eur } from "@/lib/format";
+import { pianoCedolare } from "./cedolare";
 
 const g = (d) => d.toISOString().slice(0, 10);
 const piu = (d, n) => new Date(d.getTime() + n * 86400000);
@@ -18,6 +19,7 @@ export const TIPI_EVENTO = {
   imu: ["IMU", "bg-sky-100 text-sky-800"],
   rata: ["Rata mutuo / prestito", "bg-violet-100 text-violet-800"],
   pagamento: ["Pagamento ricorrente", "bg-teal-100 text-teal-800"],
+  cedolare: ["Cedolare secca", "bg-emerald-100 text-emerald-800"],
 };
 
 // fine = giorno successivo all'ultimo (come negli eventi "tutto il giorno" di Google)
@@ -101,6 +103,36 @@ export async function eventiCalendario() {
           .filter(Boolean).join(" · "),
         link: `/spese/ricorrenti/${r.id}/modifica`,
       }, d);
+    }
+  }
+
+    // rate non ancora pagate delle dilazioni d'imposta
+  const rateDil = await prisma.rataDilazione.findMany({
+    where: { pagataIl: null },
+    include: { dilazione: { include: { rate: { select: { id: true } } } } },
+  });
+  for (const r of rateDil)
+    singolo({
+      id: `rdil-${r.id}`,
+      tipo: "rata",
+      titolo: `Rata cedolare ${r.dilazione.anno} (${r.numero}/${r.dilazione.rate.length}) — ${eur(r.importo)}`,
+      descrizione: `${r.dilazione.descrizione}. Dopo il pagamento segnala la rata come pagata nella scheda.`,
+      link: `/spese/dilazioni/${r.dilazioneId}`,
+    }, r.scadenza);
+
+  // scadenze della cedolare secca (acconti e saldo) con importo stimato
+  for (const a of [oggi.getUTCFullYear() - 1, oggi.getUTCFullYear()]) {
+    const p = await pianoCedolare(a);
+    if (p.residuo <= 0.005) continue; // già coperta da versamenti o da una dilazione
+    for (const r of p.rate) {
+      if (r.importo <= 0.005 || r.scadenza < oggi) continue;
+      singolo({
+        id: `ced-${a}-${r.id}`,
+        tipo: "cedolare",
+        titolo: `Cedolare secca ${a} — ${r.titolo} (≈ ${eur(r.importo)})`,
+        descrizione: `F24, codice tributo ${r.codice}. Importo stimato col metodo storico: verifica la cifra con il commercialista prima di pagare.`,
+        link: `/spese?anno=${a}`,
+      }, r.scadenza);
     }
   }
 

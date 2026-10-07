@@ -19,7 +19,7 @@ export const CAT_USCITE = {
     MUTUO: "Rate mutuo / prestiti",
     ALTRO: "Altro",
 };
-export const CAT_ENTRATE = { LUNGHI: "Affitti lunghi", BREVI: "Affitti brevi", TRATTENUTE: "Trattenute da cauzione" };
+export const CAT_ENTRATE = { LUNGHI: "Affitti lunghi", BREVI: "Affitti brevi", TRATTENUTE: "Trattenute da cauzione", TRANSITORI: "Affitti transitori", };
 
 const chiaveDi = (unita, palazzina) =>
     palazzina?.nome ?? unita?.palazzina?.nome ?? unita?.nome ?? "Altro";
@@ -43,7 +43,7 @@ export async function caricaMovimenti() {
         const acq = dataAcq(c.unita);
         for (const p of c.canoni) {
             if (acq && p.data < acq) continue;
-            movs.push({ data: p.data, tipo: "entrata", cat: "LUNGHI", importo: p.importo, ...rif(c.unita) });
+            movs.push({ data: p.data, tipo: "entrata", cat: c.modalita === "TRANSITORIO" ? "TRANSITORI" : "LUNGHI", importo: p.importo, ...rif(c.unita) });
         }
         arretrati += situazioneCanoni(c).arretrati;
     }

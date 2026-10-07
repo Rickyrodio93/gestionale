@@ -157,7 +157,7 @@ export default async function Investimenti() {
                   {(r.finanziato > 0 || r.rate > 0) && (
                     <p className="mt-3 text-xs text-gray-500">
                       {r.imposte > 0 && (
-                        <p className="mt-3 text-xs text-gray-500">
+                        <span className="mt-3 text-xs text-gray-500">
                           Il risultato operativo comprende la cedolare secca di
                           competenza (<b>{eur(r.cedolare)}</b>)
                           {r.sanzioni > 0 && (
@@ -167,8 +167,8 @@ export default async function Investimenti() {
                               delle dilazioni
                             </>
                           )}
-                          .
-                        </p>
+                          .{" "}
+                        </span>
                       )}
                       {r.finanziato > 0 && (
                         <>

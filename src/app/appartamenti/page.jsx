@@ -19,8 +19,10 @@ const includeUnita = {
 
 function Riga({ u }) {
   const c0 = u.contratti[0];
-  const c = c0 && !(c0.dataRilascio && c0.dataRilascio <= new Date()) ? c0 : null; // rilasciato = libera
-  const s = c && statoScadenza(c);
+  const s0 = c0 && statoScadenza(c0);
+  const concluso = s0 && ["concluso", "rinnovato"].includes(s0.livello);
+  const c = c0 && !concluso ? c0 : null; // contratto concluso = unità libera
+  const s = c ? s0 : null;
   return (
     <tr className="border-t border-gray-100 text-sm">
       <td className="py-3 pr-4 font-medium">

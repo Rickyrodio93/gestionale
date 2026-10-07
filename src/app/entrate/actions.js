@@ -16,6 +16,7 @@ async function leggiContratto(fd) {
     if (!durataMesi) return { error: "Inserisci la durata in mesi." };
 
     const dataFine = fd.get("dataFine") ? new Date(fd.get("dataFine")) : fineContratto(dataInizio, durataMesi);
+    const trans = fd.get("modalita") === "TRANSITORIO"
     if (dataFine <= dataInizio) return { error: "La data di fine deve essere successiva all'inizio." };
 
     let inquilinoId;
@@ -44,15 +45,18 @@ async function leggiContratto(fd) {
             dataInizio,
             dataFine,
             durataMesi,
-            rinnovoMesi: num(fd.get("rinnovoMesi")),
-            preavvisoMesi: num(fd.get("preavvisoMesi")) ?? 6,
+            rinnovoMesi: trans ? null : num(fd.get("rinnovoMesi")),
+            preavvisoMesi: trans ? 0 : (num(fd.get("preavvisoMesi")) ?? 6),
             canone: num(fd.get("canone")),
             persone: num(fd.get("persone")),
             cedolare: fd.get("cedolare") === "on",
             aliquotaCedolare: fd.get("cedolare") === "on" ? (num(fd.get("aliquotaCedolare")) ?? 21) : null,
             cauzione: num(fd.get("cauzione")),
             cauzioneVersataIl: fd.get("cauzioneVersataIl") ? new Date(fd.get("cauzioneVersataIl")) : null,
-            periodicitaMesi: num(fd.get("periodicitaMesi")) ?? 1,
+            periodicitaMesi: (() => {
+                const p = num(fd.get("periodicitaMesi")) ?? 1;
+                return p === 0 ? Math.max(1, Math.round(durataMesi)) : p; // 0 = unica soluzione, per tutta la durata
+            })(),
             ancoraPeriodi: fd.get("ancoraPeriodi") ? new Date(fd.get("ancoraPeriodi")) : null,
         },
     };
@@ -227,7 +231,7 @@ export async function incassaMesiMancanti(contrattoId, fd) {
     const da = sc.righe.filter((r) => r.mese < fino && r.residuo > 0.005);
     if (!da.length) return;
     await prisma.pagamentoCanone.createMany({
-            data: da.map((r) => ({ contrattoId, mese: r.mese, data: r.dal ?? new Date(`${r.mese}-01`), importo: r.residuo })),
+        data: da.map((r) => ({ contrattoId, mese: r.mese, data: r.dal ?? new Date(`${r.mese}-01`), importo: r.residuo })),
     });
     aggiorna(contrattoId);
 }

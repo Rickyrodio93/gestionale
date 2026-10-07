@@ -39,7 +39,12 @@ const C = (label, name, o = {}) => (
   </label>
 );
 
-export default function FormContratto({ unita, inquilini, contratto }) {
+export default function FormContratto({
+  unita,
+  inquilini,
+  contratto,
+  modalitaIniziale,
+}) {
   const [state, action, pending] = useActionState(
     contratto ? aggiornaContratto.bind(null, contratto.id) : creaContratto,
     null,
@@ -47,9 +52,23 @@ export default function FormContratto({ unita, inquilini, contratto }) {
   const [inqSel, setInqSel] = useState(
     contratto?.inquilinoId ?? inquilini[0]?.id ?? "nuovo",
   );
-  const [durata, setDurata] = useState(contratto?.durataMesi ?? 48);
-  const [rinnovo, setRinnovo] = useState(contratto?.rinnovoMesi ?? 48);
-  const [per, setPer] = useState(contratto?.periodicitaMesi ?? 1);
+  const PERIODI = [1, 2, 3, 6, 12];
+  const modIniz =
+    contratto?.modalita ?? modalitaIniziale ?? "QUATTRO_PIU_QUATTRO";
+  const [mod, setMod] = useState(modIniz);
+  const [durata, setDurata] = useState(
+    contratto?.durataMesi ?? PRESET[modIniz][0],
+  );
+  const [rinnovo, setRinnovo] = useState(
+    contratto?.rinnovoMesi ?? PRESET[modIniz][1],
+  );
+  const [per, setPer] = useState(
+    contratto
+      ? PERIODI.includes(contratto.periodicitaMesi)
+        ? contratto.periodicitaMesi
+        : 0
+      : 1,
+  );
   const [can, setCan] = useState(contratto?.canone ?? "");
   const [ced, setCed] = useState(contratto?.cedolare ?? false);
 
@@ -127,10 +146,11 @@ export default function FormContratto({ unita, inquilini, contratto }) {
           <select
             name="modalita"
             className={inputCls}
-            defaultValue={contratto?.modalita ?? "QUATTRO_PIU_QUATTRO"}
+            defaultValue={modIniz}
             onChange={(e) => {
               if (contratto) return; // in modifica non sovrascrivo durate già inserite
               const [d, r] = PRESET[e.target.value];
+              setMod(e.target.value);
               setDurata(d);
               setRinnovo(r);
             }}
@@ -152,18 +172,28 @@ export default function FormContratto({ unita, inquilini, contratto }) {
           value: durata,
           onChange: (e) => setDurata(e.target.value),
         })}
+        {mod === "REANSITORIO" && Number(durata) > 18 && (
+          <p className="text-xs text-amber-700 sm:col-span-2 lg:col-span-3">
+            Di norma un contratto transitorio abitativo dura da 1 a 18 mesi:
+            controlla la tipologia con chi ha redatto il contratto.
+          </p>
+        )}
+        {mod !== "TRANSITORIO" && (
+          <>
+            {C("Rinnovo (mesi)", "rinnovoMesi", {
+              type: "number",
+              value: rinnovo,
+              onChange: (e) => setRinnovo(e.target.value),
+            })}
+            {C("Preavviso disdetta (mesi)", "preavvisoMesi", {
+              type: "number",
+              def: contratto?.preavvisoMesi ?? 6,
+            })}
+          </>
+        )}
         {C("Data fine (vuota = calcolata)", "dataFine", {
           type: "date",
           def: iso(contratto?.dataFine),
-        })}
-        {C("Rinnovo (mesi)", "rinnovoMesi", {
-          type: "number",
-          value: rinnovo,
-          onChange: (e) => setRinnovo(e.target.value),
-        })}
-        {C("Preavviso disdetta (mesi)", "preavvisoMesi", {
-          type: "number",
-          def: contratto?.preavvisoMesi ?? 6,
         })}
         {C("Canone mensile (€)", "canone", {
           type: "number",
@@ -171,6 +201,7 @@ export default function FormContratto({ unita, inquilini, contratto }) {
           value: can,
           onChange: (e) => setCan(e.target.value),
         })}
+
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-gray-600">
             Il canone si paga
@@ -181,6 +212,9 @@ export default function FormContratto({ unita, inquilini, contratto }) {
             onChange={(e) => setPer(Number(e.target.value))}
             className={inputCls}
           >
+            <option value={0}>
+              In un'unica soluzione, anticipata (periodo = durata)
+            </option>
             <option value={1}>Ogni mese</option>
             <option value={2}>Ogni 2 mesi</option>
             <option value={3}>Ogni 3 mesi (trimestrale)</option>
@@ -194,11 +228,14 @@ export default function FormContratto({ unita, inquilini, contratto }) {
             "ancoraPeriodi",
             { type: "date", def: iso(contratto?.ancoraPeriodi) },
           )}
-        {per > 1 && can !== "" && (
+        {per !== 1 && can !== "" && (
           <p className="text-xs text-gray-500 sm:col-span-2 lg:col-span-3">
-            Importo di ogni periodo: <b>{(Number(can) * per).toFixed(2)} €</b>,
-            dovuto in anticipo dal primo giorno del periodo. Per 1050 €
-            trimestrali inserisci 350 come canone mensile.
+            Importo da incassare:{" "}
+            <b>
+              {(Number(can) * (per === 0 ? Number(durata) : per)).toFixed(2)} €
+            </b>
+            , dovuto in anticipo dal primo giorno
+            {per === 0 ? " del contratto" : " di ogni periodo"}.
           </p>
         )}
         {C("N° persone", "persone", {
@@ -225,10 +262,16 @@ export default function FormContratto({ unita, inquilini, contratto }) {
           />{" "}
           Cedolare secca
         </label>
-        {ced && C("Aliquota cedolare (%)", "aliquotaCedolare", {type: "number", step: "0.01", def: contratto?.aliquotaCedolare ?? 21})}
+        {ced &&
+          C("Aliquota cedolare (%)", "aliquotaCedolare", {
+            type: "number",
+            step: "0.01",
+            def: contratto?.aliquotaCedolare ?? 21,
+          })}
         {ced && (
           <p className="text-xs text-gray-500 sm:col-span-2 lg:col-span-3">
-            21% per il canone libero; 10% solo per il canone concordato nei comuni ad alta tensione abitativa e con i requisiti previsti.
+            21% per il canone libero; 10% solo per il canone concordato nei
+            comuni ad alta tensione abitativa e con i requisiti previsti.
           </p>
         )}
       </Sezione>

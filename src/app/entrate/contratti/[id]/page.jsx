@@ -45,6 +45,8 @@ const testo = {
   in_occupazione: "Contratto scaduto: l'inquilino occupa ancora l'immobile",
   concluso: "Contratto concluso: immobile rilasciato",
   rinnovato: "Contratto rinnovato con nuove condizioni",
+  transitorio:
+    "Contratto transitorio in corso: termina alla scadenza, senza disdetta",
 };
 
 const giorni = (n) => (n >= 0 ? `tra ${n} giorni` : `${Math.abs(n)} giorni fa`);
@@ -87,6 +89,19 @@ export default async function Scheda({ params }) {
   const s = statoScadenza(c);
   const oggi = new Date().toISOString().slice(0, 10);
   const sc = situazioneCanoni(c);
+  const trans = c.modalita === "TRANSITORIO";
+  const sovrap =
+    trans && c.dataFine
+      ? await prisma.prenotazione.count({
+          where: {
+            unitaId: c.unitaId,
+            stato: "CONFERMATA",
+            blocco: false,
+            checkIn: { lte: c.dataFine },
+            checkOut: { gt: c.dataInizio },
+          },
+        })
+      : 0;
   const successivo = c.rinnovato
     ? await prisma.contratto.findFirst({
         where: { precedenteId: c.id },
@@ -159,7 +174,6 @@ export default async function Scheda({ params }) {
           <Pencil size={14} /> Modifica
         </Link>
       </div>
-
       {s && (
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <span
@@ -179,15 +193,18 @@ export default async function Scheda({ params }) {
             </>
           )}
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-gray-500">
-                Ultimo giorno per la disdetta
-              </p>
-              <p className="text-lg font-semibold">{dataIt(s.limite)}</p>
-              <p className="text-xs text-gray-500">
-                {giorni(s.giorniAlLimite)}
-              </p>
-            </div>
+            {!trans && (
+              <div>
+                <p className="text-xs text-gray-500">
+                  Ultimo giorno per la disdetta
+                </p>
+                <p className="text-lg font-semibold">{dataIt(s.limite)}</p>
+                <p className="text-xs text-gray-500">
+                  {giorni(s.giorniAlLimite)}
+                </p>
+              </div>
+            )}
+
             <div>
               <p className="text-xs text-gray-500">Scadenza del contratto</p>
               <p className="text-lg font-semibold">{dataIt(s.scadenza)}</p>
@@ -196,11 +213,20 @@ export default async function Scheda({ params }) {
               </p>
             </div>
           </div>
-          <p className="mt-3 text-xs text-gray-500">
-            La comunicazione deve arrivare entro il termine, non solo essere
-            spedita: conviene lasciare un margine.
-          </p>
+          {!trans && (
+            <p className="mt-3 text-xs text-gray-500">
+              La comunicazione deve arrivare entro il termine, non solo essere
+              spedita: conviene lasciare un margine.
+            </p>
+          )}
         </section>
+      )}
+      {sovrap > 0 && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Il periodo si sovrappone a {sovrap} prenotazion
+          {sovrap === 1 ? "e" : "i"} confermat{sovrap === 1 ? "a" : "e"} di
+          questa unità: avvisa l'agenzia e verifica le date.
+        </p>
       )}
 
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -214,81 +240,84 @@ export default async function Scheda({ params }) {
             {c.rinnovoMesi && `${c.rinnovoMesi} mesi`}
           </Dato>
           <Dato label="Rinnovi effettuati">{c.rinnovi}</Dato>
-          <Dato label="Preavviso">{c.preavvisoMesi} mesi</Dato>
+          {!trans && <Dato label="Preavviso">{c.preavvisoMesi} mesi</Dato>}
           <Dato label="Canone mensile">
             {c.canone != null && eur(c.canone)}
           </Dato>
-          <Dato label="Pagamento canone">{sc.step === 1 ? "mensile" : `ogni ${sc.step} mesi, in anticipo`}</Dato>
+          <Dato label="Pagamento canone">
+            {sc.step === 1 ? "mensile" : `ogni ${sc.step} mesi, in anticipo`}
+          </Dato>
           <Dato label="Cedolare secca">{c.cedolare ? "Sì" : "No"}</Dato>
           <Dato label="Persone">{c.persone}</Dato>
         </dl>
       </section>
 
-      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 font-semibold">Disdetta e rinnovo</h2>
+      {!trans && (
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 font-semibold">Disdetta e rinnovo</h2>
 
-        {c.disdettaInviataIl ? (
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-sm">
-              Disdetta inviata il <b>{dataIt(c.disdettaInviataIl)}</b>
-              {c.disdettaNote && (
-                <span className="text-gray-500"> · {c.disdettaNote}</span>
-              )}
-            </p>
-            <BottoneConferma
-              action={annullaDisdetta.bind(null, c.id)}
-              messaggio="Annullare la disdetta registrata?"
-              className={btn}
+          {c.disdettaInviataIl ? (
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm">
+                Disdetta inviata il <b>{dataIt(c.disdettaInviataIl)}</b>
+                {c.disdettaNote && (
+                  <span className="text-gray-500"> · {c.disdettaNote}</span>
+                )}
+              </p>
+              <BottoneConferma
+                action={annullaDisdetta.bind(null, c.id)}
+                messaggio="Annullare la disdetta registrata?"
+                className={btn}
+              >
+                Annulla disdetta
+              </BottoneConferma>
+            </div>
+          ) : (
+            <form
+              action={segnaDisdetta.bind(null, c.id)}
+              className="flex flex-wrap items-end gap-3"
             >
-              Annulla disdetta
-            </BottoneConferma>
-          </div>
-        ) : (
-          <form
-            action={segnaDisdetta.bind(null, c.id)}
-            className="flex flex-wrap items-end gap-3"
-          >
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-600">
-                Data invio
-              </span>
-              <input
-                type="date"
-                name="data"
-                defaultValue={oggi}
-                className={inputCls}
-              />
-            </label>
-            <label className="block flex-1">
-              <span className="mb-1 block text-xs font-medium text-gray-600">
-                Note (motivo, raccomandata/PEC…)
-              </span>
-              <input name="note" className={inputCls} />
-            </label>
-            <button className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-              Segna disdetta inviata
-            </button>
-          </form>
-        )}
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">
+                  Data invio
+                </span>
+                <input
+                  type="date"
+                  name="data"
+                  defaultValue={oggi}
+                  className={inputCls}
+                />
+              </label>
+              <label className="block flex-1">
+                <span className="mb-1 block text-xs font-medium text-gray-600">
+                  Note (motivo, raccomandata/PEC…)
+                </span>
+                <input name="note" className={inputCls} />
+              </label>
+              <button className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                Segna disdetta inviata
+              </button>
+            </form>
+          )}
 
-        {!c.disdettaInviataIl && c.dataFine && c.rinnovoMesi && (
-          <div className="mt-4 flex items-center justify-between gap-4 border-t border-gray-100 pt-4">
-            <p className="text-sm text-gray-600">
-              Rinnovo di {c.rinnovoMesi} mesi: nuova scadenza{" "}
-              <b>{dataIt(rinnovaFine(c.dataFine, c.rinnovoMesi))}</b>
-            </p>
-            <BottoneConferma
-              action={rinnovaContratto.bind(null, c.id)}
-              messaggio="Rinnovare il contratto e spostare la scadenza?"
-              className={btn}
-            >
-              <RefreshCw size={14} /> Rinnova
-            </BottoneConferma>
-          </div>
-        )}
-      </section>
-
-      {(c.rinnovato || (c.dataFine && !c.dataRilascio)) && (
+          {!c.disdettaInviataIl && c.dataFine && c.rinnovoMesi && (
+            <div className="mt-4 flex items-center justify-between gap-4 border-t border-gray-100 pt-4">
+              <p className="text-sm text-gray-600">
+                Rinnovo di {c.rinnovoMesi} mesi: nuova scadenza{" "}
+                <b>{dataIt(rinnovaFine(c.dataFine, c.rinnovoMesi))}</b>
+              </p>
+              <BottoneConferma
+                action={rinnovaContratto.bind(null, c.id)}
+                messaggio="Rinnovare il contratto e spostare la scadenza?"
+                className={btn}
+              >
+                <RefreshCw size={14} /> Rinnova
+              </BottoneConferma>
+            </div>
+          )}
+        </section>
+      )}
+      {(!trans && c.rinnovato || (c.dataFine && !c.dataRilascio)) && (
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <h2 className="mb-2 font-semibold">Rinnovo con nuove condizioni</h2>
           {c.rinnovato ? (
@@ -326,7 +355,6 @@ export default async function Scheda({ params }) {
           )}
         </section>
       )}
-
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h2 className="mb-3 font-semibold">Occupazione e rilascio</h2>
         {c.dataRilascio ? (
@@ -396,7 +424,6 @@ export default async function Scheda({ params }) {
           </div>
         )}
       </section>
-
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="mb-3 flex items-start justify-between gap-4">
           <div>
@@ -580,7 +607,6 @@ export default async function Scheda({ params }) {
           <button className={btn}>Registra</button>
         </form>
       </section>
-
       {c.cauzione != null &&
         (() => {
           const liq = !!c.cauzioneRestituitaIl;
@@ -771,7 +797,6 @@ export default async function Scheda({ params }) {
             </section>
           );
         })()}
-
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h2 className="mb-2 font-semibold">Elimina contratto</h2>
         {nQuote > 0 ? (

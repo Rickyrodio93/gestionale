@@ -268,7 +268,7 @@ export default async function Dashboard({ searchParams }) {
           <Kpi
             label="Entrate"
             value={eur(tot.entrate)}
-            sub={`Lunghi ${eur(eSel.LUNGHI ?? 0)} · Brevi ${eur(eSel.BREVI ?? 0)} ${eSel.TRATTENUTE ? `· Trattenute ${eur(eSel.TRATTENUTE)}` : ""}`}
+            sub={`Lunghi ${eur(eSel.LUNGHI ?? 0)} · Brevi ${eur(eSel.BREVI ?? 0)} ${eSel.TRATTENUTE ? ` · Trattenute ${eur(eSel.TRATTENUTE)}` : ""} ${eSel.TRANSITORI ? ` · Transitori ${eur(eSel.TRANSITORI)}` : ""}`}
           >
             <Delta cur={tot.entrate} prev={totPrev.entrate} anno={prev} />
           </Kpi>

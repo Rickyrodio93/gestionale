@@ -24,7 +24,10 @@ export default async function Entrate({ searchParams }) {
   });
 
   const totaleCanoni = contratti
-    .filter((c) => !c.rinnovato && !(c.dataRilascio && c.dataRilascio <= new Date()))
+    .filter((c) => {
+      const lv = statoScadenza(c)?.livello;
+      return lv !== "concluso" && lv !== "rinnovato";
+    })
     .reduce((t, c) => t + (c.canone ?? 0), 0);
 
   const cauzioni = contratti
@@ -66,12 +69,21 @@ export default async function Entrate({ searchParams }) {
     <>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Entrate</h1>
-        <Link
-          href="/entrate/contratti/nuovo"
-          className="flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-        >
-          <Plus size={16} /> Nuovo contratto
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/entrate/contratti/nuovo"
+            className="flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            <Plus size={16} /> Nuovo contratto
+          </Link>
+
+          <Link
+            href="/entrate/contratti/nuovo?modalita=TRANSITORIO"
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50"
+          >
+            Nuovo transitorio
+          </Link>
+        </div>
       </div>
 
       <div className="space-y-5">
@@ -80,8 +92,8 @@ export default async function Entrate({ searchParams }) {
             <h2 className="font-semibold">Affitti lunghi</h2>
             <p className="text-xs text-gray-500">
               {contratti.length} contratti · canoni mensili{" "}
-              <b className="text-gray-800">{eur(totaleCanoni)}</b>
-              · cauzioni detenute <b className="text-gray-800">{eur(cauzioni)}</b>
+              <b className="text-gray-800">{eur(totaleCanoni)}</b>· cauzioni
+              detenute <b className="text-gray-800">{eur(cauzioni)}</b>
             </p>
           </div>
           <table className="w-full">
@@ -113,9 +125,19 @@ export default async function Entrate({ searchParams }) {
                       <div className="text-xs font-normal text-gray-500">
                         {c.unita.palazzina?.nome ?? "autonoma"}
                       </div>
+                    {c.modalita === "TRANSITORIO" && (
+                      <span className="ml-1 rounded bg-cyan-100 px-1.5 py-0.5 text-[11px] font-medium text-cyan-800">
+                        transitorio
+                      </span>
+                    )}
                     </td>
                     <td className="pr-4">
-                      <Link href={`/entrate/inquilini/${c.inquilinoId}`} className="hover:underline">{c.inquilino.nome}</Link>
+                      <Link
+                        href={`/entrate/inquilini/${c.inquilinoId}`}
+                        className="hover:underline"
+                      >
+                        {c.inquilino.nome}
+                      </Link>
                       {c.inquilino.tipo === "SOCIETA" && (
                         <span className="ml-1 text-xs text-gray-500">
                           (società)
@@ -156,11 +178,15 @@ export default async function Entrate({ searchParams }) {
                       )}
                     </td>
                     <td className="pl-4 yext-xs text-gray-600">
-                      {c.cauzione == null ? "-"
-                    : c.cauzioneRestituitaIl ? "liquidata"
-                    : c.cauzioneVersataIl ? eur(c.cauzione)
-                    : <span className="text-amber-600">da versare</span>  
-                    }
+                      {c.cauzione == null ? (
+                        "-"
+                      ) : c.cauzioneRestituitaIl ? (
+                        "liquidata"
+                      ) : c.cauzioneVersataIl ? (
+                        eur(c.cauzione)
+                      ) : (
+                        <span className="text-amber-600">da versare</span>
+                      )}
                     </td>
                     <td className="pl-2 text-right">
                       <Link

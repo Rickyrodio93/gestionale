@@ -28,15 +28,17 @@ const giorniA = (d) => Math.ceil((d - new Date()) / 86400000);
 export function statoScadenza(c) {
     if (c.tipo !== "LUNGO" || !c.dataFine) return null;
 
+    const trans = c.modalita === "TRANSITORIO"; // termina da solo: nessuna disdetta
     const scadenza = new Date(c.dataFine);
-    const limite = addMonths(scadenza, -(c.preavvisoMesi ?? 6));
+    const limite = trans ? scadenza : addMonths(scadenza, -(c.preavvisoMesi ?? 6));
     const gScad = giorniA(scadenza);
     const gLimite = giorniA(limite);
 
     let livello = "ok";
-      if (c.rinnovato) livello = "rinnovato";
-  else if (c.dataRilascio && c.dataRilascio <= new Date()) livello = "concluso";
+    if (c.rinnovato) livello = "rinnovato";
+    else if (c.dataRilascio && c.dataRilascio <= new Date()) livello = "concluso";
     else if (c.inOccupazione && gScad < 0) livello = "in_occupazione";
+    else if (trans) livello = gScad < 0 ? "concluso" : "transitorio";
     else if (gScad < 0) livello = "scaduto";
     else if (c.disdettaInviataIl) livello = "disdetta_inviata";
     else if (gLimite < 0) livello = "termine_superato";
@@ -46,19 +48,20 @@ export function statoScadenza(c) {
     return { scadenza, limite, giorniAllaScadenza: gScad, giorniAlLimite: gLimite, livello };
 }
 
-// fine reale dell'occupazione: null = ancora in corso
-export const fineEffettiva = (c) => c.dataRilascio ?? (c.inOccupazione ? null : c.dataFine);
-
 export function etichetta(s) {
     const fisse = {
         in_occupazione: "in occupazione",
         concluso: "concluso",
+        rinnovato: "rinnovato",
         scaduto: "scaduto",
         disdetta_inviata: "disdetta inviata",
-        rinnovato: "rinnovato"
     };
+    if (s.livello === "transitorio") return `transitorio · scade il ${dataIt(s.scadenza)}`;
     return fisse[s.livello] ?? `disdetta entro ${dataIt(s.limite)}`;
 }
+
+// fine reale dell'occupazione: null = ancora in corso
+export const fineEffettiva = (c) => c.dataRilascio ?? (c.inOccupazione ? null : c.dataFine);
 
 // prossimo rinnovo se non si invia disdetta
 export function prossimaScadenzaSeRinnovo(c) {
@@ -74,5 +77,6 @@ export const coloriScadenza = {
     disdetta_inviata: "bg-gray-200 text-gray-700",
     in_occupazione: "bg-orange-100 text-orange-800",
     concluso: "bg-gray-100 text-gray-500",
-    rinnovato: "bg-gray-100 text-gray-500"
+    rinnovato: "bg-gray-100 text-gray-500",
+    transitorio: "bg-cyan-100 text-cyan-800"
 };

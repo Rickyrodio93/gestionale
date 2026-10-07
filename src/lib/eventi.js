@@ -20,6 +20,7 @@ export const TIPI_EVENTO = {
   rata: ["Rata mutuo / prestito", "bg-violet-100 text-violet-800"],
   pagamento: ["Pagamento ricorrente", "bg-teal-100 text-teal-800"],
   cedolare: ["Cedolare secca", "bg-emerald-100 text-emerald-800"],
+  transitorio: ["Affitto transitorio", "bg-cyan-100 text-cyan-800"],
 };
 
 // fine = giorno successivo all'ultimo (come negli eventi "tutto il giorno" di Google)
@@ -54,6 +55,7 @@ export async function eventiCalendario() {
   for (const c of contratti) {
     const s = statoScadenza(c);
     if (!s || s.giorniAllaScadenza < 0 || s.livello === "concluso" || s.livello === "rinnovato") continue;
+    if (c.modalia === "TRANSITORIO") continue; // ha il suo evento di periodo, senza disdetta
     const chi = `${c.unita.nome} (${c.inquilino.nome})`;
     const link = `/entrate/contratti/${c.id}`;
 
@@ -72,6 +74,22 @@ export async function eventiCalendario() {
       }
     }
   }
+
+  // periodi dei contratti transitori (anche passati)
+  const trans = await prisma.contratto.findMany({
+    where: { modalita: "TRANSITORIO", dataFine: { not: null } },
+    include: { unita: true, inquilino: true },
+  });
+  for (const c of trans)
+    eventi.push({
+      id: `trans-${c.id}`,
+      tipo: "transitorio",
+      titolo: `${c.unita.nome} — transitorio (${c.inquilino.nome})`,
+      descrizione: "Contratto transitorio: le date sono occupate. Verifica che il calendario dell'agenzia sia bloccato.",
+      inizio: g(c.dataInizio),
+      fine: g(piu(c.dataFine, 1)),
+      link: `/entrate/contratti/${c.id}`,
+    });
 
   // pagamenti ricorrenti (mutuo, prestiti, internet…): passati = spese già generate, futuri = calcolati
   const tipoDi = (cat) => (cat === "MUTUO" ? "rata" : "pagamento");
@@ -106,7 +124,7 @@ export async function eventiCalendario() {
     }
   }
 
-    // rate non ancora pagate delle dilazioni d'imposta
+  // rate non ancora pagate delle dilazioni d'imposta
   const rateDil = await prisma.rataDilazione.findMany({
     where: { pagataIl: null },
     include: { dilazione: { include: { rate: { select: { id: true } } } } },

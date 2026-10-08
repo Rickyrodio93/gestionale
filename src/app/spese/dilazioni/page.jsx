@@ -1,26 +1,27 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { dilazioni } from "@/lib/cedolare";
 import { eur, dataIt } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+const Card = ({ label, value }) => (
+  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+    <p className="text-xs text-gray-500">{label}</p>
+    <p className="text-lg font-semibold">{eur(value)}</p>
+  </div>
+);
+
 export default async function Elenco() {
   const lista = await dilazioni();
   const tot = (k) => lista.reduce((t, d) => t + d[k], 0);
-  const Card = ({ label, value }) => (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-lg font-semibold">{eur(value)}</p>
-    </div>
-  );
 
   return (
     <>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <Link href="/spese" className="text-xs text-gray-500 hover:underline">
-            ← Spese
+          <Link href="/spese" className="flex items-center gap-1 text-xs text-gray-500 hover:underline">
+          <ArrowLeft size={16} /> Spese
           </Link>
           <h1 className="text-2xl font-bold">Dilazioni d'imposta</h1>
         </div>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Check, RefreshCw } from "lucide-react";
+import { ArrowLeft, Check, RefreshCw } from "lucide-react";
 import { costruisciRapporto } from "@/lib/rapporto";
 import { LOCATORE } from "@/lib/config";
 import { eur, dataIt } from "@/lib/format";
@@ -86,9 +86,9 @@ export default async function Posizione({ params }) {
         <div>
           <Link
             href="/entrate"
-            className="text-xs text-gray-500 hover:underline"
+            className="flex items-center gap-1 text-xs text-gray-500 hover:underline"
           >
-            ← Entrate
+            <ArrowLeft size={16} /> Entrate
           </Link>
           <h1 className="text-2xl font-bold">{inq.nome}</h1>
         </div>

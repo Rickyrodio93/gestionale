@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import FormAcquistoVendita from "@/components/FormAcquistoVendita";
 import BottoneElimina from "@/components/BottoneElimina";
-import { Check } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import {
   aggiungiStima,
   aggiornaStima,
@@ -57,9 +57,9 @@ export default async function Dettaglio({ params }) {
       <div>
         <Link
           href="/investimenti"
-          className="text-xs text-gray-500 hover:underline"
+          className="flex items-center gap-1 text-xs text-gray-500 hover:underline"
         >
-          ← Investimenti
+          <ArrowLeft size={16} /> Investimenti
         </Link>
         <h1 className="text-2xl font-bold">{ent.nome}</h1>
         <Link href={`/investimenti/vendite/nuova?dest=tipo:${n}`} className="text-sm text-indigo-600 hover:underline">

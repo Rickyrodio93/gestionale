@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil, RefreshCw, Trash2, Check } from "lucide-react";
+import { Pencil, RefreshCw, Trash2, Check, ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { statoScadenza, coloriScadenza, rinnovaFine } from "@/lib/scadenze";
 import { eur, dataIt } from "@/lib/format";
@@ -158,9 +158,9 @@ export default async function Scheda({ params }) {
         <div>
           <Link
             href="/entrate"
-            className="text-xs text-gray-500 hover:underline"
+            className="flex items-center gap-1 text-xs text-gray-500 hover:underline"
           >
-            ← Entrate
+            <ArrowLeft size={16} />Entrate
           </Link>
           <h1 className="text-2xl font-bold">{c.unita.nome}</h1>
           <p className="text-sm text-gray-500">

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, ArrowLeft, ArrowRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { eur, dataIt } from "@/lib/format";
 import { TIPI, STATI, totaliBolletta, statoBolletta } from "@/lib/bollette";
@@ -7,6 +7,13 @@ import BottoneElimina from "@/components/BottoneElimina";
 import { eliminaBolletta } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+const Card = ({ label, value }) => (
+  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+    <p className="text-xs text-gray-500">{label}</p>
+    <p className="text-lg font-semibold">{eur(value)}</p>
+  </div>
+);
 
 export default async function Bollette({ searchParams }) {
   const sp = await searchParams;
@@ -44,19 +51,12 @@ export default async function Bollette({ searchParams }) {
         : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
     }`;
 
-  const Card = ({ label, value }) => (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-lg font-semibold">{eur(value)}</p>
-    </div>
-  );
-
   return (
     <>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <Link href="/spese" className="text-xs text-gray-500 hover:underline">
-            ← Spese
+          <Link href="/spese" className="flex items-center gap-1 text-xs text-gray-500 hover:underline">
+            <ArrowLeft size={16} /> Spese
           </Link>
           <h1 className="text-2xl font-bold">Bollette</h1>
         </div>
@@ -132,9 +132,9 @@ export default async function Bollette({ searchParams }) {
                     <td className="py-3 pr-4">
                       <Link
                         href={`/spese/bollette/${b.id}`}
-                        className="hover:text-indigo-700 hover:underline"
+                        className="hover:text-indigo-700 hover:underline flex items-center gap-2"
                       >
-                        {dataIt(b.dal)} → {dataIt(b.al)}
+                        {dataIt(b.dal)} <ArrowRight size={14}/> {dataIt(b.al)}
                       </Link>
                     </td>
                     <td className="pr-4">

@@ -11,7 +11,7 @@ const STATO = {
   in_corso: ["In corso", "bg-indigo-100 text-indigo-800"],
   venduto: ["Venduto", "bg-gray-200 text-gray-700"],
   parziale: ["Venduto in parte", "bg-amber-100 text-amber-800"],
-  in_vendita: ["Vendita in corso", "bg-line-100 text-line-800"],
+  in_vendita: ["Vendita in corso", "bg-lime-100 text-lime-800"],
 };
 
 function M({ label, value, tono, grande }) {
@@ -139,6 +139,7 @@ export default async function Investimenti() {
                       tono={tono(r.rendOp)}
                     />
                   </div>
+
                   <div className="mt-4 grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 lg:grid-cols-4">
                     <M
                       label={
@@ -153,7 +154,6 @@ export default async function Investimenti() {
                       value={eur(r.operativo)}
                       tono={tono(r.operativo)}
                     />
-
                     <M
                       label={
                         r.stato === "in_vendita"
@@ -169,39 +169,7 @@ export default async function Investimenti() {
                       value={pct(r.recupero)}
                     />
                   </div>
-                  {(r.finanziato > 0 || r.rate > 0) && (
-                    <p className="mt-3 text-xs text-gray-500">
-                      {r.imposte > 0 && (
-                        <span className="mt-3 text-xs text-gray-500">
-                          Il risultato operativo comprende la cedolare secca di
-                          competenza (<b>{eur(r.cedolare)}</b>)
-                          {r.sanzioni > 0 && (
-                            <>
-                              {" "}
-                              e <b>{eur(r.sanzioni)}</b> di interessi e sanzioni
-                              delle dilazioni
-                            </>
-                          )}
-                          .{" "}
-                        </span>
-                      )}
-                      {r.finanziato > 0 && (
-                        <>
-                          Nel capitale: <b>{eur(r.finanziato)}</b> finanziati
-                          con il prestito
-                        </>
-                      )}
-                      {r.rate > 0 && (
-                        <>
-                          Rate del finanziamento pagate finora:{" "}
-                          <b>{eur(r.rate)}</b>, escluse dal rendimento perchè
-                          comprendono capitale e interessi.{" "}
-                        </>
-                      )}
-                      Il rendimento è quello sul capitale totale, come se avessi
-                      pagato tutto di tasca tua.
-                    </p>
-                  )}
+
                   {r.vendita && (
                     <div className="mt-4 rounded-lg bg-lime-50 p-4">
                       <div className="flex items-center justify-between gap-2">
@@ -241,12 +209,49 @@ export default async function Investimenti() {
                       </p>
                     </div>
                   )}
+
                   {r.trattenuto > 0 && (
                     <p className="mt-3 text-xs text-gray-500">
                       Il risultato comprende {eur(r.trattenuto)} trattenuti da
                       compromessi risolti.
                     </p>
                   )}
+
+                  {r.imposte > 0 && (
+                    <p className="mt-3 text-xs text-gray-500">
+                      Il risultato operativo comprende la cedolare secca di
+                      competenza (<b>{eur(r.cedolare)}</b>)
+                      {r.sanzioni > 0 && (
+                        <>
+                          {" "}
+                          e <b>{eur(r.sanzioni)}</b> di interessi e sanzioni
+                          delle dilazioni
+                        </>
+                      )}
+                      .
+                    </p>
+                  )}
+
+                  {(r.finanziato > 0 || r.rate > 0) && (
+                    <p className="mt-3 text-xs text-gray-500">
+                      {r.finanziato > 0 && (
+                        <>
+                          Nel capitale: <b>{eur(r.finanziato)}</b> finanziati
+                          con prestito.{" "}
+                        </>
+                      )}
+                      {r.rate > 0 && (
+                        <>
+                          Rate del finanziamento pagate finora:{" "}
+                          <b>{eur(r.rate)}</b>, escluse dal rendimento perché
+                          comprendono capitale e interessi.{" "}
+                        </>
+                      )}
+                      Il rendimento è quello sul capitale totale, come se avessi
+                      pagato tutto di tasca tua.
+                    </p>
+                  )}
+
                   {r.mancaValore && (
                     <p className="mt-3 text-xs text-amber-700">
                       Per il guadagno totale serve una stima di valore (o la
@@ -272,7 +277,7 @@ export default async function Investimenti() {
               Mancano i dati di acquisto: senza prezzo non si può calcolare il
               rendimento.
             </p>
-            <ul>
+            <ul className="space-y-1 text-sm">
               {mancanti.map((m) => (
                 <li key={`${m.tipo}${m.id}`}>
                   <Link

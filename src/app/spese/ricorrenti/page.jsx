@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { eur, dataIt } from "@/lib/format";
 import { CATEGORIE } from "@/lib/spese";
@@ -28,8 +28,8 @@ export default async function Ricorrenti() {
     <>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <Link href="/spese" className="text-xs text-gray-500 hover:underline">
-            ← Spese
+          <Link href="/spese" className="flex items-center gap-1 text-xs text-gray-500 hover:underline">
+            <ArrowLeft size={16}/> Spese
           </Link>
           <h1 className="text-2xl font-bold">Spese ricorrenti</h1>
         </div>

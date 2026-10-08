@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil, Check } from "lucide-react";
+import { Pencil, Check, ArrowLeft, ArrowRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { eur, dataIt } from "@/lib/format";
 import { inputCls } from "@/lib/ui";
@@ -65,12 +65,12 @@ export default async function Scheda({ params }) {
         <div>
           <Link
             href="/spese/bollette"
-            className="text-xs text-gray-500 hover:underline"
+            className=" flex items-center gap-1 text-xs text-gray-500 hover:underline"
           >
-            ← Bollette
+            <ArrowLeft size={16} /> Bollette
           </Link>
-          <h1 className="text-2xl font-bold">
-            {TIPI[b.tipo]} · {dataIt(b.dal)} → {dataIt(b.al)}
+          <h1 className="text-2xl font-bold flex items-center gap-3">
+            {TIPI[b.tipo]} · {dataIt(b.dal)} <ArrowRight /> {dataIt(b.al)}
           </h1>
           <p className="text-sm text-gray-500">
             {rif}

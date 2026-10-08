@@ -4,7 +4,11 @@ import { prisma } from "@/lib/prisma";
 import FormAcquistoVendita from "@/components/FormAcquistoVendita";
 import BottoneElimina from "@/components/BottoneElimina";
 import { Check } from "lucide-react";
-import { aggiungiStima, aggiornaStima, eliminaStima } from "@/app/investimenti/actions";
+import {
+  aggiungiStima,
+  aggiornaStima,
+  eliminaStima,
+} from "@/app/investimenti/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +62,9 @@ export default async function Dettaglio({ params }) {
           ← Investimenti
         </Link>
         <h1 className="text-2xl font-bold">{ent.nome}</h1>
+        <Link href={`/investimenti/vendite/nuova?dest=tipo:${n}`} className="text-sm text-indigo-600 hover:underline">
+          Registra una vendita rateale (compromesso)
+        </Link>
         <p className="text-sm text-gray-500">
           {tipo === "palazzina"
             ? "Intera palazzina"
@@ -136,14 +143,36 @@ export default async function Dettaglio({ params }) {
             </div>
           ))}
         </div>
-        <form action={aggiungiStima.bind(null, tipo, n)} className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
+        <form
+          action={aggiungiStima.bind(null, tipo, n)}
+          className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4"
+        >
           <select name="tipo" className={mini}>
             <Opzioni />
           </select>
-          <input type="date" name="data" defaultValue={iso(new Date())} required className={mini} />
-          <input type="number" step="0.01" name="importo" required placeholder="Valore (€)" className={`${mini} w-36`}/>
-          <input name="fonte" placeholder="Fonte (agenzia, perizia)" className={`${mini} w-52`} />
-          <button className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50">Aggiungi stima</button>
+          <input
+            type="date"
+            name="data"
+            defaultValue={iso(new Date())}
+            required
+            className={mini}
+          />
+          <input
+            type="number"
+            step="0.01"
+            name="importo"
+            required
+            placeholder="Valore (€)"
+            className={`${mini} w-36`}
+          />
+          <input
+            name="fonte"
+            placeholder="Fonte (agenzia, perizia)"
+            className={`${mini} w-52`}
+          />
+          <button className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50">
+            Aggiungi stima
+          </button>
         </form>
       </section>
     </div>

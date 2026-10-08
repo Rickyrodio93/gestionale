@@ -91,6 +91,18 @@ enum DestinazioneVersamento {
   BOLLETTE
 }
 
+enum StatoVendita {
+  IN_CORSO
+  CONCLUSA
+  RISOLTA
+}
+
+enum TipoRataVendita {
+  ANTICIPO
+  RATA
+  SALDO
+}
+
 model Palazzina {
   id             Int               @id @default(autoincrement())
   nome           String
@@ -107,6 +119,7 @@ model Palazzina {
   prezzoVendita  Float?
   costiVendita   Float?
   valori         ValoreImmobile[]
+  vendite        VenditaRateale[]
 }
 
 model ValoreImmobile {
@@ -155,6 +168,7 @@ model Unita {
   icalErrore        String?
   inizioMisura      DateTime?
   valoreIniziale    Float?
+  venditaRateales   VenditaRateale[]
 }
 
 model DatiCatastali {
@@ -442,4 +456,41 @@ model RataDilazione {
   importo     Float
   pagataIl    DateTime?
   spesa       Spesa?
+}
+
+model VenditaRateale {
+  id           Int              @id @default(autoincrement())
+  palazzina    Palazzina?       @relation(fields: [palazzinaId], references: [id])
+  palazzinaId  Int?
+  unita        Unita?           @relation(fields: [unitaId], references: [id])
+  unitaId      Int?
+  acquirente   String
+  dataFirma    DateTime
+  prezzo       Float
+  costiVendita Float? // agenzia, notaio e altri costi a tuo carico
+  stato        StatoVendita     @default(IN_CORSO)
+  dataRogito   DateTime? // prevista, poi effettiva
+  dataChiusura DateTime? // rogito o risoluzione
+  trattenuto   Float? // se risolta: quanto resta a te
+  note         String?
+  rate         RataVendita[]
+  incassi      IncassoVendita[]
+}
+
+model RataVendita {
+  id        Int             @id @default(autoincrement())
+  vendita   VenditaRateale  @relation(fields: [venditaId], references: [id], onDelete: Cascade)
+  venditaId Int
+  tipo      TipoRataVendita @default(RATA)
+  scadenza  DateTime
+  importo   Float
+}
+
+model IncassoVendita {
+  id        Int            @id @default(autoincrement())
+  vendita   VenditaRateale @relation(fields: [venditaId], references: [id], onDelete: Cascade)
+  venditaId Int
+  data      DateTime
+  importo   Float
+  note      String?
 }

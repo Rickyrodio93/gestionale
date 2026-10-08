@@ -6,6 +6,7 @@ import { FREQ, occorrenzeFuture, sincronizzaRicorrenti } from "@/lib/ricorrenti"
 import { imuStimata } from "@/lib/imu";
 import { eur } from "@/lib/format";
 import { pianoCedolare } from "./cedolare";
+import { situazioneVendita } from "./venditaRateale";
 
 const g = (d) => d.toISOString().slice(0, 10);
 const piu = (d, n) => new Date(d.getTime() + n * 86400000);
@@ -21,6 +22,7 @@ export const TIPI_EVENTO = {
   pagamento: ["Pagamento ricorrente", "bg-teal-100 text-teal-800"],
   cedolare: ["Cedolare secca", "bg-emerald-100 text-emerald-800"],
   transitorio: ["Affitto transitorio", "bg-cyan-100 text-cyan-800"],
+  vendita: ["Rata vendita", "bg-lime-100 text-lime-800"]
 };
 
 // fine = giorno successivo all'ultimo (come negli eventi "tutto il giorno" di Google)
@@ -150,6 +152,25 @@ export async function eventiCalendario() {
         titolo: `Cedolare secca ${a} — ${r.titolo} (≈ ${eur(r.importo)})`,
         descrizione: `F24, codice tributo ${r.codice}. Importo stimato col metodo storico: verifica la cifra con il commercialista prima di pagare.`,
         link: `/spese?anno=${a}`,
+      }, r.scadenza);
+    }
+  }
+
+  // rate ancora da incassare delle vendite rateali in corso
+  const vendite = await prisma.venditaRateale.findMany({
+    where: { stato: "IN_CORSO" },
+    include: { rate: true, incassi: true, palazzina: true, unita: true },
+  });
+  for (const v of vendite) {
+    const nome = v.palazzina?.nome ?? v.unita?.nome;
+    for (const r of situazioneVendita(v, ora).righe) {
+      if (r.residuo <= 0.005 || r.scadenza < oggi) continue;
+      singolo({
+        id: `vrata-${r.id}`,
+        tipo: "vendita",
+        titolo: `Rata vendita ${nome} — ${eur(r.residuo)} (${v.acquirente})`,
+        descrizione: `Compromesso firmato il ${g(v.dataFirma)}. Dopo l'incasso registralo nella scheda della vendita.`,
+        link: `/investimenti/vendite/${v.id}`,
       }, r.scadenza);
     }
   }

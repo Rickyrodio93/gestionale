@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { caricaMovimenti } from "@/lib/dashboard";
 import { impostaContratti, dilazioni } from "./cedolare";
+import { situazioneVendita, flussiResidui } from "./venditaRateale";
 
 const r2 = (n) => Math.round(n * 100) / 100;
 const ANNO_MS = 365.25 * 86400000;
@@ -55,6 +56,8 @@ export async function calcolaInvestimenti() {
     });
 
     const dil = await dilazioni();
+
+    const vendite = await prisma.venditaRateale.findMany({ include: { rate: true, incassi: true } })
 
     const palazzine = await prisma.palazzina.findMany({ include: { unita: true }, orderBy: { nome: "asc" } });
     const autonome = await prisma.unita.findMany({ where: { palazzinaId: null }, orderBy: { nome: "asc" } });
@@ -164,14 +167,45 @@ export async function calcolaInvestimenti() {
         }
         const imposte = cedolare + sanzioni;
 
+        // vendite rateali (compromessi) di questo immobile
+        const colleg = vendite.filter((v) => (inv.tipo === "palazzina" ? v.palazzinaId === inv.id : v.unitaId === inv.id));
+        const attiva = colleg.find((v) => v.stato === "IN_CORSO");
+        const conclusa = colleg.find((v) => v.stato === "CONCLUSA");
+        let trattenuto = 0; // importi trattenuti da compromessi risolti
+        for (const v of colleg) {
+            if (v.stato !== "RISOLTA" || !(v.trattenuto > 0) || !v.dataChiusura) continue;
+            if (v.dataChiusura > oggi || v.dataChiusura < inv.inizio) continue;
+            trattenuto += v.trattenuto;
+            flussi.push({ data: v.dataChiusura, importo: v.trattenuto });
+        }
+
         // con la base di partenza i lavori sono capitale; senza, sono costi della gestione
         const capitale = inv.capitale0 + ristr + (inv.inizioMisura ? finanziato : 0);
-        const opGest = operativo + ristr - imposte - (inv.inizioMisura ? 0 : finanziato);
+        const opGest = operativo + ristr - imposte - (inv.inizioMisura ? 0 : finanziato) + trattenuto;
 
         let valore = 0, stimato = false, mancaValore = false, vendute = 0;
-        if (inv.vend) {
+        let venditaInfo = null;
+        if (attiva) {
+            // vendita in corso: valore finale = prezzo concordato; flussi = incassi reali + rate ancora previste
+            const s = situazioneVendita(attiva, oggi);
+            valore = r2(attiva.prezzo - (attiva.costiVendita ?? 0));
+            for (const i of attiva.incassi) if (i.data >= inv.inizio) flussi.push({ data: i.data, importo: i.importo });
+            for (const f of flussiResidui(attiva, oggi)) flussi.push(f);
+            if (attiva.costiVendita) flussi.push({ data: attiva.dataRogito ?? s.fineAttesa ?? oggi, importo: -attiva.costiVendita });
+            venditaInfo = {
+                id: attiva.id, acquirente: attiva.acquirente, prezzo: attiva.prezzo,
+                incassato: s.incassato, residuo: s.residuo, pct: s.pct, arretrato: s.arretrato,
+                recuperoTot: (opGest + s.incassato) / capitale,
+            };
+        } else if (inv.vend) {
             valore = (inv.prezzoV ?? 0) - inv.costiV;
-            flussi.push({ data: inv.vend, importo: valore });
+            if (conclusa && conclusa.incassi.length) {
+                // venduto a rate: i flussi sono gli incassi reali, non un'unica cifra al rogito
+                for (const i of conclusa.incassi) flussi.push({ data: i.data, importo: i.importo });
+                if (inv.costiV) flussi.push({ data: inv.vend, importo: -inv.costiV });
+            } else {
+                flussi.push({ data: inv.vend, importo: valore });
+            }
         } else {
             const sp = inv.tipo === "palazzina" ? ultimo[`p${inv.id}`] : null;
             const singole = inv.coperte.some((u) => u.dataVendita);
@@ -199,11 +233,11 @@ export async function calcolaInvestimenti() {
 
         const anni = (fineP - inv.inizio) / ANNO_MS;
         const guadagno = mancaValore ? null : r2(opGest + valore - capitale);
-        const stato = inv.vend || (vendute > 0 && vendute === inv.coperte.length) ? "venduto" : vendute ? "parziale" : "in_corso";
+        const stato = attiva ? "in_vendita" : inv.vend || (vendute > 0 && vendute === inv.coperte.length) ? "venduto" : vendute ? "parziale" : "in_corso";
 
         return {
             ...inv, capitale: r2(capitale), ristr: r2(ristr), imposte: r2(imposte), cedolare: r2(cedolare), sanzioni: r2(sanzioni), finanziato: r2(finanziato), rate: r2(rate), operativo: r2(opGest), valore: r2(valore),
-            stimato, mancaValore, stato, anni, guadagno,
+            stimato, vendita: venditaInfo, trattenuto: r2(trattenuto), mancaValore, stato, anni, guadagno,
             roi: guadagno != null ? guadagno / capitale : null,
             recupero: opGest / capitale,
             rendOp: anni >= 0.25 ? opGest / anni / capitale : null,

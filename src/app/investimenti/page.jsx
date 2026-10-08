@@ -11,6 +11,7 @@ const STATO = {
   in_corso: ["In corso", "bg-indigo-100 text-indigo-800"],
   venduto: ["Venduto", "bg-gray-200 text-gray-700"],
   parziale: ["Venduto in parte", "bg-amber-100 text-amber-800"],
+  in_vendita: ["Vendita in corso", "bg-line-100 text-line-800"],
 };
 
 function M({ label, value, tono, grande }) {
@@ -39,7 +40,16 @@ export default async function Investimenti() {
 
   return (
     <>
-      <h1 className="mb-1 text-2xl font-bold">Investimenti</h1>
+      <div className="mb-1 flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Investimenti</h1>
+        <Link
+          href="/investimenti/vendite"
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
+        >
+          Vendite rateali
+        </Link>
+      </div>
+
       <p className="mb-6 max-w-3xl text-sm text-gray-500">
         Guadagno = risultato operativo (entrate − uscite dall'acquisto) + valore
         finale (vendita o ultima stima) − capitale investito. I prezzi non
@@ -102,7 +112,11 @@ export default async function Investimenti() {
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <M
                       grande
-                      label="Guadagno totale"
+                      label={
+                        r.stato === "in_vendita"
+                          ? "Guadagno atteso (a vendita conclusa)"
+                          : "Guadagno totale"
+                      }
                       value={r.guadagno == null ? "-" : eur(r.guadagno)}
                       tono={tono(r.guadagno)}
                     />
@@ -139,10 +153,11 @@ export default async function Investimenti() {
                       value={eur(r.operativo)}
                       tono={tono(r.operativo)}
                     />
+
                     <M
                       label={
-                        r.stato === "venduto"
-                          ? "Ricavo netto di vendita"
+                        r.stato === "in_vendita"
+                          ? "Prezzo concordato (netto costi)"
                           : r.stimato
                             ? "Valore stimato oggi"
                             : "Valore finale"
@@ -187,7 +202,52 @@ export default async function Investimenti() {
                       pagato tutto di tasca tua.
                     </p>
                   )}
-                  {r.marcaValore && (
+                  {r.vendita && (
+                    <div className="mt-4 rounded-lg bg-lime-50 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-lime-900">
+                          Vendita rateale · {r.vendita.acquirente}
+                        </p>
+                        <Link
+                          href={`/investimenti/vendite/${r.vendita.id}`}
+                          className="text-xs text-indigo-600 hover:underline"
+                        >
+                          Apri la scheda
+                        </Link>
+                      </div>
+                      <div className="mt-2 h-2 rounded-full bg-lime-200">
+                        <div
+                          className="h-2 rounded-full bg-lime-600"
+                          style={{
+                            width: `${Math.min(100, r.vendita.pct * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs text-gray-700">
+                        Incassato <b>{eur(r.vendita.incassato)}</b> su{" "}
+                        {eur(r.vendita.prezzo)} ({pct(r.vendita.pct)}) · restano{" "}
+                        <b>{eur(Math.max(r.vendita.residuo, 0))}</b>
+                        {r.vendita.arretrato > 0.005 && (
+                          <>
+                            {" "}
+                            ·{" "}
+                            <span className="text-red-700">
+                              in ritardo {eur(r.vendita.arretrato)}
+                            </span>
+                          </>
+                        )}{" "}
+                        · con affitti e incassi hai recuperato il{" "}
+                        <b>{pct(r.vendita.recuperoTot)}</b> del capitale.
+                      </p>
+                    </div>
+                  )}
+                  {r.trattenuto > 0 && (
+                    <p className="mt-3 text-xs text-gray-500">
+                      Il risultato comprende {eur(r.trattenuto)} trattenuti da
+                      compromessi risolti.
+                    </p>
+                  )}
+                  {r.mancaValore && (
                     <p className="mt-3 text-xs text-amber-700">
                       Per il guadagno totale serve una stima di valore (o la
                       vendita): aggiungila da «Acquisto, vendita e stime».

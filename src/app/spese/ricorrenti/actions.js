@@ -30,6 +30,7 @@ function leggi(fd) {
             note: str(fd.get("note")),
             unitaId: tipo === "unita" ? id : null,
             palazzinaId: tipo === "palazzina" ? id : null,
+            ...(fd.has("capitaleLavori") ? {capitaleLavori, dataErogazione} : {}),
         },
     };
 }

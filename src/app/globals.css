@@ -1,31 +1,168 @@
 @import "tailwindcss";
 
+/* Dark mode: il tasto tema aggiunge o toglie la classe "dark" su <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Schermi stretti: le regole stanno nel livello "components", così le classi
+   di Tailwind sulle singole pagine hanno sempre la precedenza */
+@layer components {
+  main :where(.grid)>* {
+    min-width: 0;
+    /* i grafici si restringono invece di allargare la pagina */
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (max-width: 1023px) {
+  main section:has(table) {
+    overflow-x: auto
+      /* le tabelle larghe scorrono di lato dentro la scheda */
+  }
+
+  main table {
+    min-width: 36rem;
+  }
+
+  main .justify-between {
+    flex-wrap: wrap;
+    /* titolo e pulsanti vanno a capo invece di uscire dallo schermo */
+    row-gap: 0.5rem;
+  }
+}
+
+/* iOS ingrandisce la pagina quando si tocca un campo con testo sotto i 16 px */
+@media (max-width: 1023px) {
+  input, select, textarea {
+    font-size: 16px;
+  }
 }
 
 @media print {
-  aside { display: none !important; }
-  main { height: auto !important; overflow: visible !important; padding: 0 !important; background: white !important; }
+  aside, header {
+    display: none !important
+  }
+
+  main {
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+}
+
+/* Tema scuro (solo a schermo: la stampa resta chiara) */
+@media screen {
+  .dark {
+    color-scheme: dark;
+
+    /* neutri: la scala è invertita (50 = sfondo pagina, 800 = testo) */
+    --color-gray-50: #0c101b;
+    --color-gray-100: #1d2438;
+    --color-gray-200: #2b3450;
+    --color-gray-300: #3b4666;
+    --color-gray-400: #6e7a9c;
+    --color-gray-500: #929cba;
+    --color-gray-600: #aeb7d0;
+    --color-gray-700: #c8cfe2;
+    --color-gray-800: #e1e6f3;
+    --color-gray-900: #f1f4fa;
+
+    /* colori di stato: sfondi scuri e testi chiari */
+    --color-indigo-50: #1b2142;
+    --color-indigo-100: #232b57;
+    --color-indigo-200: #2d3770;
+    --color-indigo-300: #3f4b9a;
+    --color-indigo-800: #c7d2fe;
+    --color-indigo-900: #e0e7ff;
+
+    --color-green-50: #0f2a1a;
+    --color-green-100: #14361f;
+    --color-green-200: #1d4a2b;
+    --color-green-700: #4ade80;
+    --color-green-800: #86efac;
+    --color-green-900: #bbf7d0;
+
+    --color-red-50: #331416;
+    --color-red-100: #461a1d;
+    --color-red-200: #5f2428;
+    --color-red-700: #f87171;
+    --color-red-800: #fca5a5;
+    --color-red-900: #fecaca;
+
+    --color-yellow-100: #3d3109;
+    --color-yellow-800: #fde047;
+
+    --color-amber-50: #2e2008;
+    --color-amber-100: #3f2b0a;
+    --color-amber-200: #5a3d0e;
+    --color-amber-700: #fbbf24;
+    --color-amber-800: #fcd34d;
+    --color-amber-900: #fde68a;
+
+    --color-orange-100: #442210;
+    --color-orange-800: #fdba74;
+
+    --color-sky-50: #0b2433;
+    --color-sky-100: #0e3147;
+    --color-sky-800: #7dd3fc;
+
+    --color-cyan-100: #0c3340;
+    --color-cyan-800: #67e8f9;
+
+    --color-violet-100: #2b1f4d;
+    --color-violet-800: #c4b5fd;
+
+    --color-teal-100: #0f3a38;
+    --color-teal-800: #5eead4;
+
+    --color-emerald-100: #0f3a2a;
+    --color-emerald-800: #6ee7b7;
+
+    --color-lime-50: #1a2a0c;
+    --color-lime-100: #243711;
+    --color-lime-200: #35511a;
+    --color-lime-800: #bef264;
+    --color-lime-900: #d9f99d;
+  }
+
+  .dark .bg-white {
+    background-color: #161c2d;
+  }
+
+  .dark .text-indigo-600 {
+    color: #a5b4fc;
+  }
+
+  .dark .hover\:text-indigo-700:hover {
+    color: #c7d2fe;
+  }
+
+  .dark .hover\:text-red-600:hover {
+    color: #f87171;
+  }
+
+  .dark .hover\:bg-gray-50:hover {
+    background-color: var(--color-gray-100);
+  }
+
+  /* grafici (Recharts) */
+  .dark .recharts-cartesian-axis-tick-value {
+    fill: #929cba;
+  }
+
+  .dark .recharts-cartesian-grid line {
+    stroke: #2b3450;
+  }
+
+  .dark .recharts-default-tooltip {
+    background-color: #161c2d !important;
+    border-color: #2b3450 !important
+  }
+
+  .dark .recharts-tooltip-cursor {
+    fill: rgba(255, 255, 255, 0.06)
+  }
 }

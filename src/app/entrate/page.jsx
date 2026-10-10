@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, ArrowRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { statoScadenza, coloriScadenza } from "@/lib/scadenze";
 import { eur, dataIt } from "@/lib/format";
@@ -125,11 +125,11 @@ export default async function Entrate({ searchParams }) {
                       <div className="text-xs font-normal text-gray-500">
                         {c.unita.palazzina?.nome ?? "autonoma"}
                       </div>
-                    {c.modalita === "TRANSITORIO" && (
-                      <span className="ml-1 rounded bg-cyan-100 px-1.5 py-0.5 text-[11px] font-medium text-cyan-800">
-                        transitorio
-                      </span>
-                    )}
+                      {c.modalita === "TRANSITORIO" && (
+                        <span className="ml-1 rounded bg-cyan-100 px-1.5 py-0.5 text-[11px] font-medium text-cyan-800">
+                          transitorio
+                        </span>
+                      )}
                     </td>
                     <td className="pr-4">
                       <Link
@@ -145,7 +145,10 @@ export default async function Entrate({ searchParams }) {
                       )}
                     </td>
                     <td className="pr-4">
-                      {dataIt(c.dataInizio)} → {dataIt(c.dataFine)}
+                      <div className="flex items-center gap-3">
+                        {dataIt(c.dataInizio)} <ArrowRight size={16} />{" "}
+                        {dataIt(c.dataFine)}
+                      </div>
                     </td>
                     <td className="pr-4 text-right">{eur(c.canone)}</td>
                     <td className="pl-4">

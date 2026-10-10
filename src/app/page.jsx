@@ -3,6 +3,10 @@ import {
   Categorie,
   Confronto,
   Mensile,
+  Giornaliero,
+  InvestimentiBar,
+  DebitoChart,
+  Occupazione,
 } from "@/components/DashboardCharts";
 
 import {
@@ -15,6 +19,13 @@ import {
   totaleFino,
 } from "@/lib/dashboard";
 
+import {
+  redditivita,
+  occupazioneMensile,
+  serieDebito,
+} from "@/lib/redditivita";
+
+import { calcolaInvestimenti } from "@/lib/rendimento";
 import { dataIt, eur } from "@/lib/format";
 import { imuStimata } from "@/lib/imu";
 import { prisma } from "@/lib/prisma";
@@ -24,6 +35,7 @@ import Link from "next/link";
 import { etichetta } from "@/lib/scadenze";
 import { stimaCedolare } from "@/lib/cedolare";
 import { dilazioni, interessiPagati } from "@/lib/cedolare";
+import { Fragment } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -137,6 +149,52 @@ export default async function Dashboard({ searchParams }) {
 
   // per palazzina / unità autonoma
   const perPal = perChiave(movs, anno, fino);
+  // investimenti e redditività
+  const { risultati: invest } = await calcolaInvestimenti();
+  const red = await redditivita(movs, anno, fino);
+  const occ = await occupazioneMensile(movs, anno, fino);
+  const debito = await serieDebito();
+  const datiInv = invest
+    .filter((r) => !r.errore)
+    .map((r) => ({
+      nome: r.nome,
+      capitale: r.capitale,
+      operativo: r.operativo,
+      valore: r.valore,
+    }));
+  const datiGiorn = red.gruppi.flatMap((g) =>
+    g.unita.map((u) => ({
+      nome: g.tot ? `${g.nome} — ${u.nome}` : u.nome,
+      incasso: r2(u.incassoDie ?? 0),
+      costo: r2(u.costoDie ?? 0),
+    })),
+  );
+  const RigaGiorno = ({ r, tot }) => (
+    <tr
+      className={`border-t border-gray-100 text-sm ${tot ? "bg-gray-50 font-semibold" : ""}`}
+    >
+      <td className={`py-2 pr-3 ${tot ? "pl-2" : "pl-5"}`}>{r.nome}</td>
+      <td className="text-right text-gray-600">{r.giorni}</td>
+      <td className="text-right">{eur(r.incassoDie)}</td>
+      <td
+        className="text-right"
+        title={`Spese dirette ${eur(r.dir)} · quota palazzina ${eur(r.cond)} · cedolare ${eur(r.ced)} · interessi ${eur(r.int)}`}
+      >
+        {eur(r.costoDie)}
+      </td>
+      <td
+        className={`text-right ${r.margineDie >= 0 ? "text-green-700" : "text-red-700"}`}
+      >
+        {eur(r.margineDie)}
+      </td>
+      <td className="text-right text-gray-600">
+        {r.occ != null ? `${(r.occ * 100).toFixed(0)}%` : "—"}
+      </td>
+      <td className="pr-2 text-right text-gray-600">
+        {r.ricavoNotte != null ? eur(r.ricavoNotte) : "—"}
+      </td>
+    </tr>
+  );
 
   // scadenze contratti
   const contratti = await prisma.contratto.findMany({
@@ -259,7 +317,12 @@ export default async function Dashboard({ searchParams }) {
                 </b>
               </p>
             )}
-            {interessi > 0 && <span> (inclusi ${eur(interessi)} di interessi e sanzioni pagati)</span>}
+            {interessi > 0 && (
+              <span>
+                {" "}
+                (inclusi ${eur(interessi)} di interessi e sanzioni pagati)
+              </span>
+            )}
           </div>
         </section>
 
@@ -371,6 +434,58 @@ export default async function Dashboard({ searchParams }) {
               </table>
             )}
           </section>
+        </div>
+
+        <h2 className="pt-2 text-lg font-semibold">
+          Investimenti e redditività
+        </h2>
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="font-semibold">Costo e incasso al giorno</h2>
+          <p className="mb-3 text-cs text-gray-500">
+            {periodo}, sui giorni di possesso. Passa il mouse sul costo per il
+            dettaglio. I costi della palazzina sono ripartiti sulle unità per
+            superficie catastale (in parti uguali se manca): il totale della
+            palazzina resta esatto. Per gli affitti brevi: occupazione = notti
+            prenotate / giorni, ricavo per notte = bonifici / notti.
+          </p>
+          {red.gruppi.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              Nessun immobile in possesso nel periodo.
+            </p>
+          ) : (
+            <table className="w-full">
+              <thead className="text-left text-xs text-gray-500">
+                <tr>
+                  <th className="pb-2">Palazzina / unità</th>
+                  <th className="text-right">Giorni</th>
+                  <th className="text-right">Incasso / giorno</th>
+                  <th className="text-right">Costo / giorno</th>
+                  <th className="text-right">Margine / giorno</th>
+                  <th className="text-right">Occupazione</th>
+                  <th className="text-right">Ricavo / notte</th>
+                </tr>
+              </thead>
+              <tbody>
+                {red.gruppi.map((g) => (
+                  <Fragment key={g.nome}>
+                    {g.tot ? (
+                      <RigaGiorno r={g.tot} tot />
+                    ) : (
+                      <tr><td colSpan={7} className="pt-3 text-xs font-semibold text-gray-500">{g.nome}</td></tr>
+                    )}
+                    {g.unita.map((u) => <RigaGiorno key={u.id} r={u} />)}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          {datiGiorn.length > 0 && <Giornaliero dati={datiGiorn} />}
+          {datiInv.length > 0 && <InvestimentiBar dati={datiInv} />}
+          {debito.length > 0 && <DebitoChart dati={debito} />}
+          {occ.length > 0 && <Occupazione dati={occ} anno={anno} />}
         </div>
 
         {/* scadenze */}

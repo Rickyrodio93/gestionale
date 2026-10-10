@@ -21,16 +21,15 @@ const items = [
 
 export default function AppNav() {
   const pathname = usePathname();
-  const router = useRouter();
   return (
     <Sidebar>
       {items.map(({ href, text, icon: Icon }) => (
         <SidebarItem
           key={href}
+          href={href}
           icon={<Icon size={20} />}
           text={text}
           active={href === "/" ? pathname === "/" : pathname.startsWith(href)}
-          onClick={() => router.push(href)}
         />
       ))}
     </Sidebar>

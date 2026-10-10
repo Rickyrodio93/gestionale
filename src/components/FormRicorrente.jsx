@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import {
   creaRicorrente,
@@ -102,16 +103,18 @@ export default function FormRicorrente({ unita, palazzine, ricorrente }) {
           def: ricorrente?.importo,
         })}
         {cat === "MUTUO" && (
-          <>
-            <p className="text-xs text-gray-500 sm:col-span-2">
-              Se il prestito ha finanziato dei lavori, indica qui la parte spesa
-              (es. 30.000 €). La pagina Investimenti la conta come capitale
-              investito. <b>Non registrarla anche come spesa</b>, altrimenti
-              viene conteggiata due volte.
-            </p>
-            {C("Importo del prestito usato per i lavori (€)", "capitaleLavori",{type: "nuber", step: "0.01", def: ricorrente?.capitaleLavori})}
-            {C("Data di erogazione" ,"dataErogazione", {type: "date", def: iso(ricorrente?.dataErogazione)})}
-          </>
+          <p className="text-xs text-gray-500 sm:col-span-2">
+            Per mutui e prestiti usa la sezione{" "}
+            <Link
+              href="/investimenti/finanziamenti/nuovo"
+              className="text-indigo-600 hover:underline"
+            >
+              Finanziamenti
+            </Link>
+            : separa capitale e interessi, calcola il debito residuo e crea da
+            sola le rate. Questa ricorrenza si può collegare a un finanziamento
+            già esistente.
+          </p>
         )}
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-gray-600">

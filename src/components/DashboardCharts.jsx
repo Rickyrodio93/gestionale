@@ -22,12 +22,23 @@ const eur = (n) =>
     currency: "EUR",
     maximumFractionDigits: 0,
   }).format(n);
+
 const compatto = (n) =>
   new Intl.NumberFormat("it-IT", {
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(n);
+
 const fmt = (v) => (v == null ? "-" : eur(v));
+
+const eurD = (v) =>
+  v == null
+    ? "—"
+    : new Intl.NumberFormat("it-IT", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 2,
+      }).format(v);
 
 const VERDE = "#16a34a";
 const ROSSO = "#ef4444";
@@ -202,6 +213,145 @@ export function Categorie({ dati, anno }) {
           </BarChart>
         </ResponsiveContainer>
       )}
+    </Box>
+  );
+}
+
+export function Giornaliero({ dati }) {
+  return (
+    <Box
+      titolo="Incasso e costo al giorno per unità"
+      sotto="Costo = spese di gestione, cedolare maturata e interessi; la quota capitale delle rate e i lavori straordinari sono esclusi"
+    >
+      <ResponsiveContainer
+        width="100%"
+        height={Math.max(220, dati.length * 62)}
+      >
+        <BarChart
+          data={dati}
+          layout="vertical"
+          margin={{ top: 4, right: 16, left: 0, bottom: 0 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+          <XAxis type="number" tickFormatter={(v) => `${v} €`} {...asse} />
+          <YAxis type="category" dataKey="nome" width={150} {...asse} />
+          <Tooltip formatter={eurD} />
+          <Legend />
+          <Bar
+            dataKey="incasso"
+            name="Incasso al giorno"
+            fill={VERDE}
+            radius={[0, 4, 4, 0]}
+          />
+          <Bar
+            dataKey="costo"
+            name="Costo al giorno"
+            fill={ROSSO}
+            radius={[0, 4, 4, 0]}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </Box>
+  );
+}
+
+export function InvestimentiBar({ dati }) {
+  return (
+    <Box
+      titolo="Investimenti: capitale, risultato e valore"
+      sotto="Quanto hai investito, quanto ha reso la gestione e quanto vale (o varrà a vendita conclusa)."
+    >
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={dati} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="nome" {...asse} />
+          <YAxis tickFormatter={compatto} width={52} {...asse} />
+          <Tooltip formatter={fmt} />
+          <Legend />
+          <ReferenceLine y={0} stroke="#9ca3af" />
+          <Bar
+            dataKey="capitale"
+            name="Capitale investito"
+            fill="#c7d2fe"
+            radius={[4, 4, 0, 0]}
+          />
+          <Bar
+            dataKey="operativo"
+            name="Risultato operativo cumulato"
+            fill={VERDE}
+            radius={[4, 4, 0, 0]}
+          />
+          <Bar
+            dataKey="valore"
+            name="Valore attuale / atteso"
+            fill={INDACO}
+            radius={[4, 4, 0, 0]}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </Box>
+  );
+}
+
+export function DebitoChart({ dati }) {
+  return (
+    <Box
+      titolo="Debito residuo dei finanziamenti"
+      sotto="Effettivo fino a oggi, poi previsto secondo il piano di ammortamento."
+    >
+      <ResponsiveContainer width="100%" height={280}>
+        <LineChart
+          data={dati}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis
+            dataKey="label"
+            interval="preserveStartEnd"
+            minTickGap={40}
+            {...asse}
+          />
+          <YAxis tickFormatter={compatto} width={52} {...asse} />
+          <Tooltip formatter={fmt} />
+          <Legend />
+          <Line
+            dataKey="effettivo"
+            name="Effettivo"
+            stroke={INDACO}
+            strokeWidth={3}
+            dot={false}
+            connectNulls={false}
+          />
+          <Line
+            dataKey="previsto"
+            name="Previsto"
+            stroke="#94a3b8"
+            strokeWidth={2}
+            strokeDasharray="5 4"
+            dot={false}
+            connectNulls={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </Box>
+  );
+}
+
+export function Occupazione({ dati, anno }) {
+  return (
+    <Box titolo={`Affitti brevi: incassi e occupazione · ${anno}`} sotto="Barre: bonifici ricevuti nel mese. Linea: notti prenotate sui giorni di possesso.">
+      <ResponsiveContainer width="100%" height={280}>
+        <ComposedChart data={dati} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="mese" {...asse} />
+          <YAxis yAxisId="a" tickFormatter={compatto} width={48} {...asse} />
+          <YAxis yAxisId="b" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${v}%`} width={44} {...asse} />
+          <Tooltip formatter={(v, nome) => (nome === "Occupazione" ? (v == null ? "—" : `${v}%`) : fmt(v))} />
+          <Legend />
+          <Bar yAxisId="a" dataKey="incasso" name="Incassi" fill={VERDE} radius={[4, 4, 0, 0]} />
+          <Line yAxisId="b" dataKey="occupazione" name="Occupazione" stroke={INDACO} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        </ComposedChart>
+      </ResponsiveContainer>
     </Box>
   );
 }

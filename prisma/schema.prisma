@@ -103,6 +103,11 @@ enum TipoRataVendita {
   SALDO
 }
 
+enum ScopoFinanziamento {
+  ACQUISTO
+  LAVORI
+}
+
 model Palazzina {
   id             Int               @id @default(autoincrement())
   nome           String
@@ -120,6 +125,7 @@ model Palazzina {
   costiVendita   Float?
   valori         ValoreImmobile[]
   vendite        VenditaRateale[]
+  finanziamenti  Finanziamento[]
 }
 
 model ValoreImmobile {
@@ -169,6 +175,7 @@ model Unita {
   inizioMisura      DateTime?
   valoreIniziale    Float?
   venditaRateales   VenditaRateale[]
+  finanziamenti     Finanziamento[]
 }
 
 model DatiCatastali {
@@ -392,6 +399,7 @@ model SpesaRicorrente {
   spese             Spesa[]
   capitaleLavori    Float? // parte del prestito usata per lavori e non registrata come spesa
   dataErogazione    DateTime?
+  finanziamento     Finanziamento?
 }
 
 model TrattenutaCauzione {
@@ -493,4 +501,25 @@ model IncassoVendita {
   data      DateTime
   importo   Float
   note      String?
+}
+
+model Finanziamento {
+  id             Int                @id @default(autoincrement())
+  descrizione    String
+  scopo          ScopoFinanziamento @default(ACQUISTO)
+  palazzina      Palazzina?         @relation(fields: [palazzinaId], references: [id], onDelete: Cascade)
+  palazzinaId    Int?
+  unita          Unita?             @relation(fields: [unitaId], references: [id], onDelete: Cascade)
+  unitaId        Int?
+  importo        Float // capitale erogato
+  dataErogazione DateTime
+  rata           Float
+  frequenzaMesi  Int                @default(1)
+  primaRata      DateTime
+  numeroRate     Int
+  tassoAnnuo     Float? // nominale: dato o ricavato dalla rata
+  speseIniziali  Float? // istruttoria, perizia, imposta sostitutiva…
+  note           String?
+  ricorrente     SpesaRicorrente?   @relation(fields: [ricorrenteId], references: [id], onDelete: SetNull)
+  ricorrenteId   Int?               @unique
 }

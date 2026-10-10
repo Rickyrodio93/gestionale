@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Check } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { eur, dataIt } from "@/lib/format";
 import FormDilazione from "@/components/FormDilazione";
@@ -53,9 +53,9 @@ export default async function Scheda({ params }) {
         <div>
           <Link
             href="/spese/dilazioni"
-            className="text-xs text-gray-500 hover:underline"
+            className="flex items-center gap-1 text-xs text-gray-500 hover:underline"
           >
-            ← Dilazioni
+            <ArrowLeft size={16}/>Dilazioni
           </Link>
           <h1 className="text-2xl font-bold">{d.descrizione}</h1>
           <p className="text-sm text-gray-500">

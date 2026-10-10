@@ -9,6 +9,8 @@ import {
   aggiornaStima,
   eliminaStima,
 } from "@/app/investimenti/actions";
+import { eur, dataIt } from "@/lib/format";
+import { riepilogoFinanziamento } from "@/lib/finanziamento";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +41,19 @@ export default async function Dettaglio({ params }) {
         });
   if (!ent) notFound();
 
+  const finanz = await prisma.finanziamento.findMany({
+    where:
+      tipo === "palazzina"
+        ? { OR: [{ palazzinaId: n }, { unita: { palazzinaId: n } }] }
+        : { unitaId: n },
+    orderBy: { dataErogazione: "asc" },
+  });
+  const quotaFin = finanz
+    .filter((x) => x.scopo === "ACQUISTO")
+    .reduce((t, x) => t + x.importo, 0);
+  const costoAcq = (ent.prezzoAcquisto ?? 0) + (ent.costiAcquisto ?? 0);
+  const mezziPropri = costoAcq - quotaFin;
+
   const eredita =
     tipo === "unita" &&
     ent.palazzina?.prezzoAcquisto != null &&
@@ -62,7 +77,10 @@ export default async function Dettaglio({ params }) {
           <ArrowLeft size={16} /> Investimenti
         </Link>
         <h1 className="text-2xl font-bold">{ent.nome}</h1>
-        <Link href={`/investimenti/vendite/nuova?dest=tipo:${n}`} className="text-sm text-indigo-600 hover:underline">
+        <Link
+          href={`/investimenti/vendite/nuova?dest=tipo:${n}`}
+          className="text-sm text-indigo-600 hover:underline"
+        >
           Registra una vendita rateale (compromesso)
         </Link>
         <p className="text-sm text-gray-500">
@@ -88,6 +106,86 @@ export default async function Dettaglio({ params }) {
       )}
 
       <FormAcquistoVendita tipo={tipo} id={n} ent={ent} />
+
+      {ent.prezzoAcquisto != null && (
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-3 font-semibold">Come hai pagato l'acquisto</h2>
+          <div className="grid gap-4 sm:grid-cols-4">
+            <div>
+              <p className="text-xs text-gray-500">Prezzo di acquisto</p>
+              <p className="font-semibold">{eur(ent.prezzoAcquisto)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Costi accessori</p>
+              <p className="font-semibold">{eur(ent.costiAcquisto ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Finanziato (mutuo)</p>
+              <p className="font-semibold">{eur(quotaFin)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Mezzi propri</p>
+              <p
+                className={`font-semibold ${mezziPropri < 0 ? "text-red-700" : ""}`}
+              >
+                {eur(mezziPropri)}
+              </p>
+            </div>
+          </div>
+          {mezziPropri < 0 && (
+            <p className="mt-2 text-xs text-amber-700">
+              I finanziamenti per l'acquisto superano prezzo e costi: controlla
+              gli importi.
+            </p>
+          )}
+          <p className="mt-2 text-xs text-gray-500">
+            Mezzi propri = prezzo + costi accessori − finanziamenti per
+            l'acquisto. Si aggiorna da solo quando aggiungi o modifichi un
+            finanziamento.
+          </p>
+        </section>
+      )}
+
+      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-semibold">Finanziamenti</h2>
+          <Link
+            href={`/investimenti/finanziamenti/nuovo?dest=${tipo}:${n}&scopo=ACQUISTO`}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
+          >
+            Aggiungi finanziamento
+          </Link>
+        </div>
+        {finanz.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            Nessun finanziamento collegato a questo immobile.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {finanz.map((f) => {
+              const r = riepilogoFinanziamento(f);
+              return (
+                <li
+                  key={f.id}
+                  className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                >
+                  <Link
+                    href={`/investimenti/finanziamenti/${f.id}`}
+                    className="font-medium hover:underline"
+                  >
+                    {f.descrizione}
+                  </Link>
+                  <span className="text-xs text-gray-600">
+                    {f.scopo === "ACQUISTO" ? "acquisto" : "lavori"} ·{" "}
+                    {eur(f.importo)} · rata {eur(f.rata)} · debito residuo{" "}
+                    {eur(r.debitoResiduo)} · fine {dataIt(r.finePiano)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h2 className="mb-1 font-semibold">Stime di valore</h2>

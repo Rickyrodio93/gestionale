@@ -42,12 +42,20 @@ export default async function Investimenti() {
     <>
       <div className="mb-1 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Investimenti</h1>
-        <Link
-          href="/investimenti/vendite"
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
-        >
-          Vendite rateali
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/investimenti/finanziamenti"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
+          >
+            Finanziamenti
+          </Link>
+          <Link
+            href="/investimenti/vendite"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
+          >
+            Vendite rateali
+          </Link>
+        </div>
       </div>
 
       <p className="mb-6 max-w-3xl text-sm text-gray-500">
@@ -169,6 +177,86 @@ export default async function Investimenti() {
                       value={pct(r.recupero)}
                     />
                   </div>
+
+                  {r.giornaliero && (
+                    <div className="mt-4 grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 lg:grid-cols-4">
+                      <M label="Incasso al giorno" value={eur(r.giornaliero.incassoDie)} />
+                      <M label="Costo al giorno" value={eur(r.giornaliero.costoDie)} />
+                      <M label="Margine al giorno" value={eur(r.giornaliero.margineDie)} />
+                      <M label="Giorni di possesso" value={r.giornaliero.giorni} />
+                    </div>
+                  )}
+
+                  {r.fin && (
+                    <div className="mt-4 rounded-lg bg-sky-50 p-4">
+                      <p className="mb-3 text-sm font-medium text-sky-900">
+                        Sul tuo capitale (con il finanziamento)
+                      </p>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <M
+                          grande
+                          label="ROE"
+                          value={pct(r.fin.roe)}
+                          tono={tono(r.fin.roe)}
+                        />
+                        <M
+                          grande
+                          label="IRR sul capitale proprio"
+                          value={pct(r.fin.irr)}
+                          tono={tono(r.fin.irr)}
+                        />
+                        <M
+                          label="Capitale proprio"
+                          value={eur(r.fin.capitaleProprio)}
+                        />
+                        <M
+                          label="Guadagno sul capitale proprio"
+                          value={
+                            r.fin.profittoEq == null
+                              ? "-"
+                              : eur(r.fin.profittoEq)
+                          }
+                          tono={tono(r.fin.profittoEq)}
+                        />
+                      </div>
+                      <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <M
+                          label="Debito residuo oggi"
+                          value={eur(r.fin.debitoOggi)}
+                        />
+                        <M
+                          label="Interessi pagati (e da pagare fino alla chiusura)"
+                          value={eur(r.fin.interessi)}
+                        />
+                        <M
+                          label="Rendimento di cassa annuo (dopo le rate)"
+                          value={pct(r.fin.cashAnnuo)}
+                          tono={tono(r.fin.cashAnnuo)}
+                        />
+                        <M
+                          label="Tasso medio dei finanziamenti"
+                          value={
+                            r.fin.tassoMedio != null
+                              ? `${r.fin.tassoMedio.toFixed(2).replace(".", ",")}%`
+                              : "-"
+                          }
+                        />
+                      </div>
+                      {r.fin.tassoMedio != null && r.rendOp != null && (
+                        <p className="mt-3 text-xs text-gray-600">
+                          Il debito costa in media{" "}
+                          <b>
+                            {r.fin.tassoMedio.toFixed(2).replace(".", ",")}%
+                          </b>{" "}
+                          l'anno e l'immobile rende <b>{pct(r.rendOp)}</b>{" "}
+                          (operativo, senza rivalutazione):{" "}
+                          {r.rendOp * 100 > r.fin.tassoMedio
+                            ? "la leva lavora a tuo favore."
+                            : "il costo del debito supera il rendimento operativo, e conviene solo se l'immobile si rivaluta."}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {r.vendita && (
                     <div className="mt-4 rounded-lg bg-lime-50 p-4">

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoveRight, Plus, RefreshCw } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { dataIt } from "@/lib/format";
 import { eventiCalendario, TIPI_EVENTO } from "@/lib/eventi";
@@ -53,7 +53,7 @@ export default async function Calendario({ searchParams }) {
     .slice(0, 30);
   const periodo = (e) =>
     e.tipo === "prenotazione" || e.tipo === "occupato"
-      ? `${dataIt(e.inizio)} → ${dataIt(e.fine)}`
+      ? `${dataIt(e.inizio)} ${<MoveRight size={16} />} ${dataIt(e.fine)}`
       : dataIt(e.inizio);
 
   const btn =

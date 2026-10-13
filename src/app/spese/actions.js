@@ -11,9 +11,10 @@ function leggiSpesa(fd) {
   const data = fd.get("data");
   const [tipo, idStr] = String(fd.get("destinazione") || "").split(":");
   const id = Number(idStr);
-  if (importo == null || !data || !id || !["unita", "palazzina"].includes(tipo))
+    const generale = tipo === "tutti";
+  if (importo == null || !data || !["unita", "palazzina", "tutti"].includes(tipo) || (!generale && !id))
     return { error: "Compila categoria, a cosa si riferisce, data e importo." };
-
+  
   const d = new Date(data);
   return {
     dati: {

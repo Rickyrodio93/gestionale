@@ -3,6 +3,7 @@ import { totaliBolletta } from "@/lib/bollette";
 import { situazioneCanoni } from "@/lib/canoni";
 import { sincronizzaRicorrenti } from "@/lib/ricorrenti";
 import { dataAcq } from "./investimento";
+import { ripartisciGenerale } from "./riparto";
 
 const GIORNO = 86400000;
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -64,12 +65,21 @@ export async function caricaMovimenti() {
         if (t.contratto.cauzioneRestituitaIl)
             movs.push({ data: t.contratto.cauzioneRestituitaIl, tipo: "entrata", cat: "TRATTENUTE", importo: t.applicato, ...rif(t.contratto.unita) });
 
+    const tutteUnita = await prisma.unita.findMany({ include: { palazzina: true, catasto: true } });
     const spese = await prisma.spesa.findMany({
         include: { palazzina: true, unita: { include: { palazzina: true } } },
     });
-    for (const s of spese)
+    for (const s of spese) {
+        const generale = !s.unitaId && !s.palazzinaId && !s.rataId && s.categoria !== "CEDOLARE";
+        const { parti } = generale ? ripartisciGenerale(s, tutteUnita) : { parti: [] };
+        if (parti.length) {
+            // spesa su tutti gli immobili: un movimento per unità, così bilanci e rendimenti la vedono già ripartita
+            for (const p of parti)
+                movs.push({ data: s.data, tipo: "uscita", cat: s.categoria, importo: p.importo, ...rif(p.unita) });
+            continue;
+        }
         movs.push({ data: s.data, tipo: "uscita", cat: s.categoria, importo: s.importo, ...rif(s.unita, s.palazzina) });
-
+    }
     const bollette = await prisma.bolletta.findMany({
         include: { palazzina: true, unita: { include: { palazzina: true } }, quote: { include: { pagamenti: true } } },
     });

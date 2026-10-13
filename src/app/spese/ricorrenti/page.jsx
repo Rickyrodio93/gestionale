@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Pencil, ArrowLeft } from "lucide-react";
+import { Plus, Pencil, ArrowLeft, ArrowRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { eur, dataIt } from "@/lib/format";
 import { CATEGORIE } from "@/lib/spese";
@@ -83,8 +83,10 @@ export default async function Ricorrenti() {
                     <td className="pr-4">{FREQ[r.frequenza][0]}</td>
                     <td className="text-right">{eur(r.importo)}</td>
                     <td className="text-right">{eur(annuo(r))}</td>
-                    <td className="pl-4 text-xs text-gray-600">
-                      {dataIt(r.dal)} → {r.al ? dataIt(r.al) : "senza fine"}
+                    <td className=" pl-4 text-xs text-gray-600">
+                      <div className="flex items-center gap-3">
+                      {dataIt(r.dal)} <ArrowRight size={16} /> {r.al ? dataIt(r.al) : "senza fine"}
+                      </div>
                     </td>
                     <td className="pl-4 text-xs text-gray-600">
                       {p ? (

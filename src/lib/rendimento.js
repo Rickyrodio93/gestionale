@@ -135,7 +135,7 @@ export async function calcolaInvestimenti() {
                 const v = m.tipo === "entrata" ? m.importo : -m.importo;
                 operativo += v;
                 flussi.push({ data: m.data, importo: v });
-                if (inv.inizioMisura && m.tipo === "uscita" && m.cat === "STRAORDINARIA") ristr += m.importo;
+                        if (m.tipo === "uscita" && m.cat === "STRAORDINARIA") ristr += m.importo;
             }
 
             // prestiti per lavori (non registrati come spesa)
@@ -213,7 +213,7 @@ export async function calcolaInvestimenti() {
                 margineDie: (entrateTot - costoTot) / giorniPoss,
             };
 
-            // con la base di partenza i lavori sono capitale; senza, sono costi della gestione
+            // le ristrutturazioni sono sempre capitale
             const capitale = inv.capitale0 + ristr + (inv.inizioMisura ? finanziato : 0);
             const opGest = operativo + ristr - imposte - (inv.inizioMisura ? 0 : finanziato) + trattenuto;
             const capitaleProprio = r2(capitale - debito0 - (inv.inizioMisura ? finanziato : 0));

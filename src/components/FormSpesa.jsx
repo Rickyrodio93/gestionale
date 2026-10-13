@@ -1,23 +1,30 @@
 "use client";
-import { useActionState } from "react";
-import { aggiornaSpesa, creaSpesa } from "@/app/spese/actions";
-import { CATEGORIE } from "@/lib/spese";
+import { useState, useActionState } from "react";
+import { creaSpesa, aggiornaSpesa } from "@/app/spese/actions";
 import { inputCls } from "@/lib/ui";
+import { CATEGORIE } from "@/lib/spese";
 
 const iso = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 
-export default function FormSpesa({ unita, palazzine, spesa,iniziale }) {
+export default function FormSpesa({ unita, palazzine, spesa, iniziale }) {
   const [state, action, pending] = useActionState(
     spesa ? aggiornaSpesa.bind(null, spesa.id) : creaSpesa,
     null,
   );
   const v = spesa ?? iniziale;
 
-  const dest = spesa
+  const destOrig = spesa
     ? spesa.unitaId
       ? `unita:${spesa.unitaId}`
-      : `palazzina:${spesa.palazzinaId}`
+      : spesa.palazzinaId
+        ? `palazzina:${spesa.palazzinaId}`
+        : "tutti:0"
     : "";
+  const [cat, setCat] = useState(v?.categoria ?? "IMU");
+  const [dest, setDest] = useState(
+    destOrig || ((v?.categoria ?? "IMU") === "IMU" ? "tutti:0" : ""),
+  );
+  const [toccata, setToccata] = useState(!!destOrig);
 
   const C = (label, name, o = {}) => (
     <label className="block">
@@ -44,12 +51,17 @@ export default function FormSpesa({ unita, palazzine, spesa,iniziale }) {
           </span>
           <select
             name="categoria"
-            defaultValue={v?.categoria ?? "IMU"}
+            value={cat}
+            onChange={(e) => {
+              setCat(e.target.value);
+              if (!toccata && !spesa)
+                setDest(e.target.value === "IMU" ? "tutti:0" : "");
+            }}
             className={inputCls}
           >
-            {Object.entries(CATEGORIE).map(([k, v]) => (
+            {Object.entries(CATEGORIE).map(([k, t]) => (
               <option key={k} value={k}>
-                {v}
+                {t}
               </option>
             ))}
           </select>
@@ -61,12 +73,19 @@ export default function FormSpesa({ unita, palazzine, spesa,iniziale }) {
           </span>
           <select
             name="destinazione"
-            defaultValue={dest}
-            className={inputCls}
+            value={dest}
             required
+            onChange={(e) => {
+              setDest(e.target.value);
+              setToccata(true);
+            }}
+            className={inputCls}
           >
             <option value="" disabled>
               Scegli…
+            </option>
+            <option value="tutti:0">
+              Tutti gli immobili (ripartita nel bilancio)
             </option>
             {palazzine.length > 0 && (
               <optgroup label="Intera palazzina">
@@ -87,6 +106,15 @@ export default function FormSpesa({ unita, palazzine, spesa,iniziale }) {
             </optgroup>
           </select>
         </label>
+
+        {dest.startsWith("tutti") && (
+          <p className="text-xs text-gray-500 sm:col-span-2">
+            La spesa resta una sola riga e viene ripartita nel bilancio tra le
+            unità in possesso nell'anno di competenza: l'IMU in proporzione
+            all'IMU stimata di ciascuna (servono catasto e aliquota), le altre
+            categorie per superficie.
+          </p>
+        )}
 
         {C("Data di pagamento", "data", {
           type: "date",

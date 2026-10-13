@@ -36,6 +36,7 @@ import { etichetta } from "@/lib/scadenze";
 import { stimaCedolare } from "@/lib/cedolare";
 import { dilazioni, interessiPagati } from "@/lib/cedolare";
 import { Fragment } from "react";
+import Tooltip, { TooltipRighe } from "@/components/Tooltips";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,7 @@ function Delta({ cur, prev, invert = false, anno }) {
     <span
       className={`text-xs font-medium ${buono ? "text-green-700" : "text-red-700"}`}
     >
-      {pct >= 0 ? "+" : "-"}
+      {pct >= 0 ? "+" : ""}
       {pct.toFixed(0)}%{" "}
       <span className="font-normal text-gray-500">vs {anno}</span>
     </span>
@@ -160,7 +161,8 @@ export default async function Dashboard({ searchParams }) {
       nome: r.nome,
       capitale: r.capitale,
       operativo: r.operativo,
-      valore: r.valore,
+      valore: r.mancaValore && !r.valore ? null : r.valore,
+      guadagno: r.guadagno,
     }));
   const datiGiorn = red.gruppi.flatMap((g) =>
     g.unita.map((u) => ({
@@ -169,32 +171,117 @@ export default async function Dashboard({ searchParams }) {
       costo: r2(u.costoDie ?? 0),
     })),
   );
-  const RigaGiorno = ({ r, tot }) => (
-    <tr
-      className={`border-t border-gray-100 text-sm ${tot ? "bg-gray-50 font-semibold" : ""}`}
-    >
-      <td className={`py-2 pr-3 ${tot ? "pl-2" : "pl-5"}`}>{r.nome}</td>
-      <td className="text-right text-gray-600">{r.giorni}</td>
-      <td className="text-right">{eur(r.incassoDie)}</td>
-      <td
-        className="text-right"
-        title={`Spese dirette ${eur(r.dir)} · quota palazzina ${eur(r.cond)} · cedolare ${eur(r.ced)} · interessi ${eur(r.int)}`}
+  const RigaGiorno = ({ r, tot }) => {
+    const costiDett = [
+      ["Spese dirette dell'unità", r.dir],
+      ["Quota delle spese della palazzina", r.cond],
+      ["Cedolare maturata", r.ced],
+      ["Interessi dei finanziamenti", r.int],
+    ]
+      .filter(([, v]) => v > 0.005)
+      .map(([l, v]) => [l, eur(v)]);
+
+    return (
+      <tr
+        className={`border-t border-gray-100 text-sm ${tot ? "bg-gray-50 font-semibold" : ""}`}
       >
-        {eur(r.costoDie)}
-      </td>
-      <td
-        className={`text-right ${r.margineDie >= 0 ? "text-green-700" : "text-red-700"}`}
-      >
-        {eur(r.margineDie)}
-      </td>
-      <td className="text-right text-gray-600">
-        {r.occ != null ? `${(r.occ * 100).toFixed(0)}%` : "—"}
-      </td>
-      <td className="pr-2 text-right text-gray-600">
-        {r.ricavoNotte != null ? eur(r.ricavoNotte) : "—"}
-      </td>
-    </tr>
-  );
+        <td className={`py-2 pr-3 ${tot ? "pl-2" : "pl-5"}`}>{r.nome}</td>
+        <td className="text-right text-gray-600">{r.giorni}</td>
+
+        <td className="text-right">
+          <Tooltip
+            contenuto={
+              <TooltipRighe
+                titolo="Incassi nel periodo"
+                righe={[
+                  ["incassi", eur(r.incasso)],
+                  ["Giorni di possesso", String(r.giorni)],
+                ]}
+                nota={`${eur(r.incassoDie)} al giorno`}
+              />
+            }
+          >
+            {eur(r.incassoDie)}
+          </Tooltip>
+        </td>
+
+        <td className="text-right">
+          {costiDett.length > 0 ? (
+            <Tooltip
+              contenuto={
+                <TooltipRighe
+                  titolo="Costi nel periodo"
+                  righe={costiDett}
+                  totale={["Totale", eur(r.costo)]}
+                  nota={`${eur(r.costoDie)} al giorno. Quota capitale delle rate e lavori staordinari esclusi.`}
+                />
+              }
+            >
+              {eur(r.costoDie)}
+            </Tooltip>
+          ) : (
+            eur(r.costoDie)
+          )}
+        </td>
+
+        <td
+          className={`text-right ${r.margineDie >= 0 ? "text-green-700" : "text-red-700"}`}
+        >
+          <Tooltip
+            contenuto={
+              <TooltipRighe
+                titolo="Margine nel periodo"
+                righe={[
+                  ["Incassi", eur(r.incasso)],
+                  ["Costi", `- ${eur(r.costo)}`],
+                ]}
+                totale={["Margine", eur(r.incasso - r.costo)]}
+              />
+            }
+          >
+            {eur(r.margineDie)}
+          </Tooltip>
+        </td>
+        <td className="text-right text-gray-600">
+          {r.occ !== null ? (
+            <Tooltip
+              contenuto={
+                <TooltipRighe
+                  righe={[
+                    ["Notti prenotate", String(r.notti)],
+                    ["giorni di possesso", String(r.giorni)],
+                  ]}
+                  nota="Contano solo le prenotazioni con dati completi: i blocchi generici del calendario dell'agenzia sono esclusi."
+                />
+              }
+            >
+              {`${(r.occ * 100).toFixed(2)}%`}
+            </Tooltip>
+          ) : (
+            "-"
+          )}
+        </td>
+        <td className="pr-2 text-right text-gray-600">
+          {r.ricavoNotte !== null ? (
+            <Tooltip
+              contenuto={
+                <TooltipRighe
+                  righe={[
+                    ["Incassi affitti brevi", eur(r.ricavoNotte * r.notti)],
+                    ["Notti prenotate", String(r.notti)],
+                  ]}
+                />
+              }
+            >
+              {eur(r.ricavoNotte)}
+            </Tooltip>
+          ) : (
+            "-"
+          )}
+        </td>
+      </tr>
+    );
+  };
 
   // scadenze contratti
   const contratti = await prisma.contratto.findMany({
@@ -442,11 +529,12 @@ export default async function Dashboard({ searchParams }) {
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <h2 className="font-semibold">Costo e incasso al giorno</h2>
           <p className="mb-3 text-cs text-gray-500">
-            {periodo}, sui giorni di possesso. Passa il mouse sul costo per il
-            dettaglio. I costi della palazzina sono ripartiti sulle unità per
-            superficie catastale (in parti uguali se manca): il totale della
-            palazzina resta esatto. Per gli affitti brevi: occupazione = notti
-            prenotate / giorni, ricavo per notte = bonifici / notti.
+            {periodo}, sui giorni di possesso. Passa il mouse (o tocca) sui
+            valori sottolineati per il dettaglio. I costi della palazzina sono
+            ripartiti sulle unità per superficie catastale (in parti uguali se
+            manca): il totale della palazzina resta esatto. Per gli affitti
+            brevi: occupazione = notti prenotate / giorni, ricavo per notte =
+            bonifici / notti.
           </p>
           {red.gruppi.length === 0 ? (
             <p className="text-sm text-gray-500">
@@ -471,9 +559,18 @@ export default async function Dashboard({ searchParams }) {
                     {g.tot ? (
                       <RigaGiorno r={g.tot} tot />
                     ) : (
-                      <tr><td colSpan={7} className="pt-3 text-xs font-semibold text-gray-500">{g.nome}</td></tr>
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="pt-3 text-xs font-semibold text-gray-500"
+                        >
+                          {g.nome}
+                        </td>
+                      </tr>
                     )}
-                    {g.unita.map((u) => <RigaGiorno key={u.id} r={u} />)}
+                    {g.unita.map((u) => (
+                      <RigaGiorno key={u.id} r={u} />
+                    ))}
                   </Fragment>
                 ))}
               </tbody>

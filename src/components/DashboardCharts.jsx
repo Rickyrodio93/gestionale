@@ -4,7 +4,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   ComposedChart,
   Legend,
   Line,
@@ -132,44 +131,31 @@ export function Confronto({ righe, anni }) {
   );
 }
 export function Annuale({ dati }) {
+  const righe = dati.map((d) => ({
+    ...d,
+    utile: d.risultato >= 0 ? d.risultato : null,
+    perdita: d.risultato < 0 ? d.risultato : null,
+  }));
   return (
     <Box
       titolo="Totali per anno"
       sotto="Il risultato è verde se l'anno chiude in utile, rosso se in perdita."
     >
       <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={dati} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <BarChart
+          data={righe}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        >
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="anno" {...asse} />
           <YAxis tickFormatter={compatto} width={48} {...asse} />
           <Tooltip formatter={fmt} />
           <Legend />
           <ReferenceLine y={0} stroke="#9ca3af" />
-          <Bar
-            dataKey="entrate"
-            name="Entrate"
-            fill="#86efac"
-            radius={[4, 4, 0, 0]}
-          />
-          <Bar
-            dataKey="uscite"
-            name="Uscite"
-            fill="#fca5a5"
-            radius={[4, 4, 0, 0]}
-          />
-          <Bar
-            dataKey="risultato"
-            name="Risultato"
-            fill={INDACO}
-            radius={[4, 4, 0, 0]}
-          >
-            {dati.map((d) => (
-              <Cell
-                key={d.anno}
-                fill={d.risultato >= 0 ? "#15803d" : "#b91c1c"}
-              />
-            ))}
-          </Bar>
+          <Bar dataKey="entrate" name="Entrate" fill="#86efac" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="uscite" name="Uscite" fill="#fca5a5" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="utile" name="Risultato (utile)" stackId="risultato" fill="#15803d" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="perdita" name="Risultato (perdita)" stackId="risultato" fill="#b91c1c" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </Box>
@@ -256,14 +242,21 @@ export function Giornaliero({ dati }) {
 }
 
 export function InvestimentiBar({ dati }) {
+  const righe = dati.map((d) => ({
+    ...d,
+    guadagnoPos: d.guadagno != null && d.guadagno >= 0 ? d.guadagno : null,
+    guadagnoNeg: d.guadagno != null && d.guadagno < 0 ? d.guadagno : null,
+  }));
   return (
     <Box
       titolo="Investimenti: capitale, risultato e valore"
-      sotto="Quanto hai investito, quanto ha reso la gestione e quanto vale (o varrà a vendita conclusa)."
+      sotto="Guadagno netto = risultato operativo + valore − capitale. Senza una stima di valore o una vendita il guadagno non si calcola."
     >
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={dati} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+      <ResponsiveContainer width="100%" height={320}>
+        <BarChart
+          data={righe}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        >
           <XAxis dataKey="nome" {...asse} />
           <YAxis tickFormatter={compatto} width={52} {...asse} />
           <Tooltip formatter={fmt} />
@@ -278,7 +271,7 @@ export function InvestimentiBar({ dati }) {
           <Bar
             dataKey="operativo"
             name="Risultato operativo cumulato"
-            fill={VERDE}
+            fill="#14b8a6"
             radius={[4, 4, 0, 0]}
           />
           <Bar
@@ -286,6 +279,20 @@ export function InvestimentiBar({ dati }) {
             name="Valore attuale / atteso"
             fill={INDACO}
             radius={[4, 4, 0, 0]}
+          />
+          <Bar
+            dataKey="guadagnoPos"
+            name="Guadagno netto"
+            stackId="guadagno"
+            fill={VERDE}
+            radius={[4, 4, 0, 0]}
+          />
+          <Bar
+            dataKey="guadagnoNeg"
+            name="Perdita netta"
+            stackId="guadagno"
+            fill={ROSSO}
+            radius={[0, 0, 4, 4]}
           />
         </BarChart>
       </ResponsiveContainer>
@@ -339,17 +346,48 @@ export function DebitoChart({ dati }) {
 
 export function Occupazione({ dati, anno }) {
   return (
-    <Box titolo={`Affitti brevi: incassi e occupazione · ${anno}`} sotto="Barre: bonifici ricevuti nel mese. Linea: notti prenotate sui giorni di possesso.">
+    <Box
+      titolo={`Affitti brevi: incassi e occupazione · ${anno}`}
+      sotto="Barre: bonifici ricevuti nel mese. Linea: notti prenotate sui giorni di possesso."
+    >
       <ResponsiveContainer width="100%" height={280}>
-        <ComposedChart data={dati} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <ComposedChart
+          data={dati}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        >
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="mese" {...asse} />
           <YAxis yAxisId="a" tickFormatter={compatto} width={48} {...asse} />
-          <YAxis yAxisId="b" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${v}%`} width={44} {...asse} />
-          <Tooltip formatter={(v, nome) => (nome === "Occupazione" ? (v == null ? "—" : `${v}%`) : fmt(v))} />
+          <YAxis
+            yAxisId="b"
+            orientation="right"
+            domain={[0, 100]}
+            tickFormatter={(v) => `${v}%`}
+            width={44}
+            {...asse}
+          />
+          <Tooltip
+            formatter={(v, nome) =>
+              nome === "Occupazione" ? (v == null ? "—" : `${v}%`) : fmt(v)
+            }
+          />
           <Legend />
-          <Bar yAxisId="a" dataKey="incasso" name="Incassi" fill={VERDE} radius={[4, 4, 0, 0]} />
-          <Line yAxisId="b" dataKey="occupazione" name="Occupazione" stroke={INDACO} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+          <Bar
+            yAxisId="a"
+            dataKey="incasso"
+            name="Incassi"
+            fill={VERDE}
+            radius={[4, 4, 0, 0]}
+          />
+          <Line
+            yAxisId="b"
+            dataKey="occupazione"
+            name="Occupazione"
+            stroke={INDACO}
+            strokeWidth={2}
+            dot={{ r: 3 }}
+            connectNulls
+          />
         </ComposedChart>
       </ResponsiveContainer>
     </Box>

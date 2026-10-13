@@ -2,6 +2,7 @@ import { dataIt, eur } from "@/lib/format";
 import { calcolaInvestimenti } from "@/lib/rendimento";
 import { Pencil } from "lucide-react";
 import Link from "next/link";
+import Tooltip, { TooltipRighe } from "@/components/Tooltips";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ const STATO = {
   in_vendita: ["Vendita in corso", "bg-lime-100 text-lime-800"],
 };
 
-function M({ label, value, tono, grande }) {
+function M({ label, value, tono, grande, dettaglio }) {
   const colore =
     tono === "pos"
       ? "text-green-700"
@@ -27,7 +28,7 @@ function M({ label, value, tono, grande }) {
       <p
         className={`${grande ? "text-xl" : "text-sm"} font-semibold ${colore}`}
       >
-        {value}
+        {dettaglio ? <Tooltip contenuto={dettaglio}>{value}</Tooltip> : value}
       </p>
     </div>
   );
@@ -59,10 +60,11 @@ export default async function Investimenti() {
       </div>
 
       <p className="mb-6 max-w-3xl text-sm text-gray-500">
-        Guadagno = risultato operativo (entrate − uscite dall'acquisto) + valore
-        finale (vendita o ultima stima) − capitale investito. I prezzi non
-        entrano nei bilanci annuali della dashboard. La plusvalenza fiscale non
-        è calcolata.
+        Capitale investito = prezzo (o valore di partenza) + costi di acquisto +
+        ristrutturazioni. Risultato operativo = entrate − spese correnti −
+        imposte. Guadagno = risultato operativo + valore finale (vendita o
+        ultima stima) − capitale investito. I prezzi non entrano nei bilanci
+        annuali della dashboard. La plusvalenza fiscale non è calcolata.
       </p>
 
       <div className="space-y-5">
@@ -150,12 +152,36 @@ export default async function Investimenti() {
 
                   <div className="mt-4 grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 lg:grid-cols-4">
                     <M
-                      label={
-                        r.ristr > 0
-                          ? "Capitale (valore iniziale + lavori)"
-                          : "Capitale investito"
-                      }
+                      label="Capitale investito"
                       value={eur(r.capitale)}
+                      dettaglio={
+                        <TooltipRighe
+                          titolo="da cosa è composto"
+                          righe={[
+                            ...(r.inizioMisura
+                              ? [["Valore iniziale", eur(r.capitale0)]]
+                              : [
+                                  ["Prezzo di acquisto", eur(r.prezzo)],
+                                  ...(r.costi > 0
+                                    ? [["Costi di acquisto", eur(r.costi)]]
+                                    : []),
+                                ]),
+                            ...(r.ristr > 0
+                              ? [["Ristrutturazioni pagate", eur(r.ristr)]]
+                              : []),
+                            ...(r.finanziato > 0
+                              ? [
+                                  [
+                                    "Lavori finanziati con prestito",
+                                    eur(r.finanziato),
+                                  ],
+                                ]
+                              : []),
+                          ]}
+                          totale={["Capitale investito", eur(r.capitale)]}
+                          nota="Le spese correnti (IMU, condominio, bollette, manutenzione ordinaria) non sono capitale: stanno nel risultato operativo."
+                        />
+                      }
                     />
                     <M
                       label="Risultato operativo cumulato"
@@ -180,10 +206,22 @@ export default async function Investimenti() {
 
                   {r.giornaliero && (
                     <div className="mt-4 grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 lg:grid-cols-4">
-                      <M label="Incasso al giorno" value={eur(r.giornaliero.incassoDie)} />
-                      <M label="Costo al giorno" value={eur(r.giornaliero.costoDie)} />
-                      <M label="Margine al giorno" value={eur(r.giornaliero.margineDie)} />
-                      <M label="Giorni di possesso" value={r.giornaliero.giorni} />
+                      <M
+                        label="Incasso al giorno"
+                        value={eur(r.giornaliero.incassoDie)}
+                      />
+                      <M
+                        label="Costo al giorno"
+                        value={eur(r.giornaliero.costoDie)}
+                      />
+                      <M
+                        label="Margine al giorno"
+                        value={eur(r.giornaliero.margineDie)}
+                      />
+                      <M
+                        label="Giorni di possesso"
+                        value={r.giornaliero.giorni}
+                      />
                     </div>
                   )}
 

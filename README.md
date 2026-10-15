@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Gestionale Appartamenti
 
-## Getting Started
+Gestionale personale per il monitoraggio e la gestione di un portafoglio immobiliare (unità in palazzina, affitti brevi e affitti a lungo/transitorio).
 
-First, run the development server:
+## Stack Tecnologico
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Framework:** Next.js (App Router, JavaScript), React
+- **Stile:** Tailwind CSS v4, Lucide React
+- **Grafici:** Recharts
+- **Database & ORM:** SQLite locale (`dev.db`) con **Prisma 6** (Nota: non utilizzare Prisma 7 per via della configurazione della connessione nello schema).
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Requisiti di Sistema e Ambiente
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+- **Ambiente:** Windows con PowerShell
+- **Cartella di lavoro:** `C:\Users\arodi\Desktop\gestionale`
+- **Gestione Porte:** Se la porta `3000` è occupata, Next.js si avvierà sulla `3001`. È possibile terminare i processi attivi con:
+  ```powershell
+  taskkill /IM node.exe /F
+  ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Installazione e Avvio
 
-## Learn More
+1. Clona o apri la cartella del progetto.
+2. Configura il file `.env` con la stringa di connessione SQLite:
+   ```env
+   DATABASE_URL="file:./dev.db"
+   ```
+3. Installa le dipendenze:
+   ```powershell
+   npm install
+   ```
+4. Esegui le migrazioni e formatta lo schema Prisma:
+   ```powershell
+   npx prisma format
+   npx prisma migrate dev --name init
+   ```
+5. Avvia il server di sviluppo:
+   ```powershell
+   npm run dev
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+## Struttura Principale del Progetto
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `src/app/`: Pagine e rotte dell'applicazione (Dashboard, Appartamenti, Spese, Entrate, Investimenti, Calendario).
+- `src/components/`: Componenti UI riutilizzabili (Sidebar, Moduli, Tabelle, Grafici).
+- `src/lib/`: Logica di business, utilità di calcolo (IMU, cedolare, ammortamenti, OMI, iCal) e client Prisma.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Regole di Sviluppo e Scelte Tecniche
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Calcoli Fiscali & Cassa:** La dashboard e le spese operano principalmente per cassa, mentre la cedolare secca viene calcolata anche per competenza.
+- **Formato Enums in Prisma:** Gli enum all'interno di `schema.prisma` devono essere scritti con un valore per riga.
+- **Pulizia Cache:** In caso di anomalie di compilazione, ripulire la cache con:
+  ```powershell
+  Remove-Item -Recurse -Force .next
+  ```

@@ -9,15 +9,6 @@ Gestionale personale per il monitoraggio e la gestione di un portafoglio immobil
 - **Grafici:** Recharts
 - **Database & ORM:** SQLite locale (`dev.db`) con **Prisma 6** (Nota: non utilizzare Prisma 7 per via della configurazione della connessione nello schema).
 
-## Requisiti di Sistema e Ambiente
-
-- **Ambiente:** Windows con PowerShell
-- **Cartella di lavoro:** `C:\Users\arodi\Desktop\gestionale`
-- **Gestione Porte:** Se la porta `3000` è occupata, Next.js si avvierà sulla `3001`. È possibile terminare i processi attivi con:
-  ```powershell
-  taskkill /IM node.exe /F
-  ```
-
 ## Installazione e Avvio
 
 1. Clona o apri la cartella del progetto.

@@ -48,7 +48,9 @@ export async function calcolaInvestimenti() {
     const ultimo = {};
     for (const v of stime) {
         const k = v.unitaId ? `u${v.unitaId}` : `p${v.palazzinaId}`;
-        if (!(k in ultimo)) ultimo[k] = v;
+        const att = ultimo[k];
+        // le stime manuali (perizia, mercato) hanno la precedenza sull'OMI, anche se più vecchie
+        if (!att || (att.tipo === "OMI" && v.tipo !== "OMI")) ultimo[k] = v;
     }
 
     // prestiti per lavori tracciati solo come ricorrenze, senza scheda finanziamento
@@ -135,7 +137,7 @@ export async function calcolaInvestimenti() {
                 const v = m.tipo === "entrata" ? m.importo : -m.importo;
                 operativo += v;
                 flussi.push({ data: m.data, importo: v });
-                        if (m.tipo === "uscita" && m.cat === "STRAORDINARIA") ristr += m.importo;
+                if (m.tipo === "uscita" && m.cat === "STRAORDINARIA") ristr += m.importo;
             }
 
             // prestiti per lavori (non registrati come spesa)
@@ -220,6 +222,7 @@ export async function calcolaInvestimenti() {
 
             let valore = 0, stimato = false, mancaValore = false, vendute = 0;
             let venditaInfo = null;
+            let usaOmi = false;
             if (attiva) {
                 // vendita in corso: valore finale = prezzo concordato; flussi = incassi reali + rate ancora previste
                 valore = r2(attiva.prezzo - (attiva.costiVendita ?? 0));
@@ -246,6 +249,7 @@ export async function calcolaInvestimenti() {
                 let stima = 0;
                 if (sp && !singole) {
                     stima = sp.importo;
+                    if (sp.tipo === "OMI") usaOmi = true;
                 } else {
                     if (inv.coperte.length === 0) mancaValore = true;
                     for (const u of inv.coperte) {
@@ -254,7 +258,10 @@ export async function calcolaInvestimenti() {
                             valore += r;
                             vendute++;
                             flussi.push({ data: u.dataVendita, importo: r });
-                        } else if (ultimo[`u${u.id}`]) stima += ultimo[`u${u.id}`].importo;
+                        } else if (ultimo[`u${u.id}`]) {
+                            stima += ultimo[`u${u.id}`].importo;
+                            if (ultimo[`u${u.id}`].tipo === "OMI") usaOmi = true;
+                        }
                         else mancaValore = true;
                     }
                 }
@@ -326,6 +333,7 @@ export async function calcolaInvestimenti() {
                 rendOp: anni >= 0.25 ? opGest / anni / capitale : null,
                 irr: !mancaValore && anni >= 1 ? xirr(flussi) : null,
                 vendita: venditaInfo,
+                stimaOmi: usaOmi,
                 fin, giornaliero
             };
         })

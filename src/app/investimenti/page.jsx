@@ -56,6 +56,7 @@ export default async function Investimenti() {
           >
             Vendite rateali
           </Link>
+          <Link href="/investimenti/valutazione" className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50">Valutazioni OMI</Link>
         </div>
       </div>
 
@@ -375,6 +376,14 @@ export default async function Investimenti() {
                       )}
                       Il rendimento è quello sul capitale totale, come se avessi
                       pagato tutto di tasca tua.
+                    </p>
+                  )}
+
+                  {r.stimaOmi && (
+                    <p className="mt-3 text-xs text-gray-500">
+                      Il valore usa una stima teorica da quotazioni OMI, di larga massima.{" "}
+                      <Link href={`/investimenti/${r.tipo}/${r.id}`} className="text-indigo-600 hover:underline">Aggiungi una stima o una perizia</Link>{" "}
+                      per sostituirla.
                     </p>
                   )}
 

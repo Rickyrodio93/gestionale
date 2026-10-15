@@ -126,6 +126,9 @@ model Palazzina {
   valori         ValoreImmobile[]
   vendite        VenditaRateale[]
   finanziamenti  Finanziamento[]
+  comune         String?
+  lat            Float?
+  lon            Float?
 }
 
 model ValoreImmobile {
@@ -176,6 +179,11 @@ model Unita {
   valoreIniziale    Float?
   venditaRateales   VenditaRateale[]
   finanziamenti     Finanziamento[]
+  omiZona           String?
+  omiTipologia      String?
+  omiStato          String?
+  lat               Float?
+  lon               Float?
 }
 
 model DatiCatastali {
@@ -522,4 +530,33 @@ model Finanziamento {
   note           String?
   ricorrente     SpesaRicorrente?   @relation(fields: [ricorrenteId], references: [id], onDelete: SetNull)
   ricorrenteId   Int?               @unique
+}
+
+model QuotazioneOmi {
+  id         Int     @id @default(autoincrement())
+  semestre   String // es. "2025-2"
+  comuneCat  String // codice catastale del comune, es. "F205"
+  comune     String?
+  fascia     String?
+  zona       String
+  zonaDescr  String?
+  tipologia  String
+  stato      String
+  min        Float // €/m² di compravendita
+  max        Float
+  superficie String? // "L" lorda, "N" netta
+  linkZona   String?
+
+  @@index([comuneCat, semestre])
+  @@index([linkZona])
+}
+
+model ZonaOmi {
+  id       Int    @id @default(autoincrement())
+  linkZona String @unique
+  geom     String // JSON: poligoni → anelli → [lon, lat]
+  minLat   Float
+  maxLat   Float
+  minLon   Float
+  maxLon   Float
 }

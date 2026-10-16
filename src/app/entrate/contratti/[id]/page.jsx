@@ -160,7 +160,8 @@ export default async function Scheda({ params }) {
             href="/entrate"
             className="flex items-center gap-1 text-xs text-gray-500 hover:underline"
           >
-            <ArrowLeft size={16} />Entrate
+            <ArrowLeft size={16} />
+            Entrate
           </Link>
           <h1 className="text-2xl font-bold">{c.unita.nome}</h1>
           <p className="text-sm text-gray-500">
@@ -317,7 +318,7 @@ export default async function Scheda({ params }) {
           )}
         </section>
       )}
-      {(!trans && c.rinnovato || (c.dataFine && !c.dataRilascio)) && (
+      {((!trans && c.rinnovato) || (c.dataFine && !c.dataRilascio)) && (
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <h2 className="mb-2 font-semibold">Rinnovo con nuove condizioni</h2>
           {c.rinnovato ? (
@@ -570,24 +571,15 @@ export default async function Scheda({ params }) {
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-gray-500">
-              Segna incassati i {sc.step > 1 ? "periodi" : "mesi"} precedenti a
+              Data di incasso
             </span>
-            {sc.step > 1 ? (
-              <select name="fino" defaultValue={sc.corrente} className={mini}>
-                {sc.righe.map((r) => (
-                  <option key={r.mese} value={r.mese}>
-                    {etichettaPeriodo(r, sc.step)}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="month"
-                name="fino"
-                defaultValue={sc.corrente}
-                className={mini}
-              />
-            )}
+            <input
+              type="date"
+              name="data"
+              defaultValue={oggi}
+              required
+              className={mini}
+            />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-gray-500">

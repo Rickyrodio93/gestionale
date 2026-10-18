@@ -43,6 +43,12 @@ export function leggiTabella(testo) {
     });
 }
 
+// il semestre sta nella prima riga del CSV: "... Semestre 2025/2 - elaborazione ..." → "2025-2"
+export function semestreDa(testo) {
+    const m = /Semestre\s+(\d{4})\s*\/\s*([12])/i.exec(testo.slice(0, 500));
+    return m ? `${m[1]}-${m[2]}` : null;
+}
+
 // ---- perimetri delle zone (KML) ----
 const coord = (t) =>
     t
@@ -52,21 +58,19 @@ const coord = (t) =>
         .filter((c) => c.length >= 2 && Number.isFinite(c[0]) && Number.isFinite(c[1]))
         .map((c) => [c[0], c[1]]);
 
+// Ogni zona è identificata da "CODICE_COMUNE:ZONA" (es. "L682:D8"): nei KML reali il campo LinkZona è vuoto,
+// mentre codice del comune (Comune_amm) e codice zona ci sono sempre.
 export function leggiKml(testo) {
     const zone = new Map();
     let campione = null;
 
     for (const pm of testo.match(/<Placemark[\s>][\s\S]*?<\/Placemark>/gi) ?? []) {
-        const piano = pm
-            .replace(/<coordinates[\s\S]*?<\/coordinates>/gi, " ")
-            .replace(/<!\[CDATA\[|\]\]>/g, " ")
-            .replace(/<[^>]+>/g, " ")
-            .replace(/\s+/g, " ")
-            .trim();
-        campione ??= piano.slice(0, 300);
-
-        const link = /\b[A-Z]{2}\d{8}\b/.exec(piano)?.[0]; // LinkZona, es. RC00004174
-        if (!link) continue;
+        const dato = (nome) => new RegExp(`<Data name="${nome}">[\\s\\S]*?<value>([^<]*)</value>`, "i").exec(pm)?.[1]?.trim();
+        const com = dato("CODCOM") || /Cod\. Naz\. Comune<\/b><\/td><td>([A-Z0-9]{4})</i.exec(pm)?.[1];
+        const cz = dato("CODZONA") || /Zona OMI<\/b><\/td><td>([A-Z0-9]+)</i.exec(pm)?.[1];
+        campione ??= pm.replace(/<coordinates[\s\S]*?<\/coordinates>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
+        if (!com || !cz) continue;
+        const chiave = `${com.toUpperCase()}:${cz.toUpperCase()}`;
 
         const poligoni = [...pm.matchAll(/<Polygon[\s\S]*?<\/Polygon>/gi)]
             .map((p) =>
@@ -75,14 +79,14 @@ export function leggiKml(testo) {
             .filter((anelli) => anelli.length > 0);
         if (!poligoni.length) continue;
 
-        const z = zone.get(link) ?? { linkZona: link, poligoni: [] };
+        const z = zone.get(chiave) ?? { linkZona: chiave, poligoni: [] };
         z.poligoni.push(...poligoni);
-        zone.set(link, z);
+        zone.set(chiave, z);
     }
 
     if (!zone.size)
         throw new Error(
-            `Nel file KML non trovo il codice delle zone (tipo «RM00001234»). Contenuto del primo elemento: «${campione ?? "file vuoto"}». Mandamelo e adatto la lettura.`
+            `Nel file KML non trovo il codice del comune e della zona (CODCOM / CODZONA). Contenuto del primo elemento: «${campione ?? "file vuoto"}».`
         );
 
     return [...zone.values()].map((z) => {

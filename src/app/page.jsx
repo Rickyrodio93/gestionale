@@ -351,13 +351,13 @@ export default async function Dashboard({ searchParams }) {
         <section className={``}>
           <div className="flex items-center gap-4">
             <div
-              className={`rounded-full p-3 ${utile ? "bg-green-100 text-green-700" : "bg-red-800 text-red-700"}`}
+              className={`rounded-full p-3 ${utile ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
             >
               {utile ? <TrendingUp size={28} /> : <TrendingDown size={28} />}
             </div>
             <div>
               <p
-                className={`text-sm font-semibold uppercase tracking-wide ${utile ? "text-green-800" : "text-red-700"}`}
+                className={`text-sm font-semibold uppercase tracking-wide ${utile ? "text-green-700" : "text-red-700"}`}
               >
                 {utile ? "In utile" : "In perdita"} {periodo}
               </p>
@@ -422,10 +422,13 @@ export default async function Dashboard({ searchParams }) {
           >
             <Delta cur={tot.entrate} prev={totPrev.entrate} anno={prev} />
           </Kpi>
+
           <Kpi label="Uscite" value={eur(tot.uscite)}>
             <Delta cur={tot.uscite} prev={totPrev.uscite} invert anno={prev} />
           </Kpi>
+
           <Kpi label="Margine" value={margine} sub="risultato entrate" />
+
           <Kpi
             label="Bollette da incassare"
             value={eur(crediti)}
@@ -438,6 +441,7 @@ export default async function Dashboard({ searchParams }) {
               Vedi elenco
             </Link>
           </Kpi>
+
           <Kpi
             label="Canoni arretrati"
             value={eur(arretrati)}
@@ -450,6 +454,7 @@ export default async function Dashboard({ searchParams }) {
               Vedi contratti
             </Link>
           </Kpi>
+
           {(cedAnno.righe.length > 0 || dilAperte > 0) && (
             <Kpi
               label={`Cedolare secca ${anno}`}

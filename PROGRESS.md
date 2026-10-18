@@ -1,6 +1,6 @@
 # Gestionale Appartamenti: stato del progetto
 
-Aggiornato al 15 ottobre 2026. Serve per riprendere il lavoro in una nuova conversazione senza rispiegare tutto.
+Aggiornato al 17 ottobre 2026. Serve per riprendere il lavoro in una nuova conversazione senza rispiegare tutto.
 
 ## 1. Cos'è e come lavoriamo
 
@@ -43,9 +43,9 @@ app/
     inquilini/[id]/             posizione e report dell'inquilino
   investimenti/                 rendimenti
     [tipo]/[id]/                acquisto, vendita, stime di valore, finanziamenti
+    omiActions.js               importazione dei file OMI (la sezione OMI sta in fondo alla pagina Investimenti)
     finanziamenti/              elenco, nuovo, [id]
     vendite/                    vendite rateali: elenco, nuova, [id]
-    valutazione/                stima da quotazioni OMI
   calendario/                   mese, prossimi eventi, sincronizzazione iCal
     prenotazioni/               nuova, [id]/modifica
 components/
@@ -56,13 +56,13 @@ components/
   BottoneElimina, BottoneConferma, BottoneStampa, FiltroSelect
   FormUnita, FormContratto, FormRinnovo, FormIncasso, FormSpesa, FormBolletta, FormRicorrente,
   FormDilazione, FormPrenotazione, FormAcquistoVendita, FormVendita, FormFinanziamento,
-  FormImportOmi, FormPosizione, CardValutazione
+  FormImportOmi, SezioneOmi (valori OMI dentro Investimenti)
 lib/
   prisma, format, ui                       utilità
   imu, scadenze, canoni, bollette, datiBolletta, cauzione, versamenti, rapporto
   cedolare, ricorrenti, riparto, spese, config
   dashboard, redditivita, rendimento, investimento, finanziamento, venditaRateale
-  canali, ical, sincronizzaIcal, eventi, omi
+  canali, ical, sincronizzaIcal, eventi, omi (lettura file), omiZona (indirizzo → coordinate → zona), valutazioneOmi (calcolo e stime), condizioni
 ```
 
 ## 4. Modello dati (Prisma)
@@ -81,6 +81,8 @@ Punti da ricordare:
 
 - `Contratto.modalita`: 4+4, 3+2, **transitorio**, altro. Campi utili: `periodicitaMesi` e `ancoraPeriodi` (canone trimestrale in anticipo), `cauzione*`, `inOccupazione`, `dataRilascio`, `rinnovato`, `precedenteId`, `aliquotaCedolare`.
 - `Spesa.categoria`: IMU, CEDOLARE, CONDOMINIO, ORDINARIA, STRAORDINARIA, MUTUO, ALTRO. Con `unitaId` e `palazzinaId` entrambi vuoti la spesa vale per **tutti gli immobili** (oppure è la rata di una dilazione).
+- `Palazzina` e `Unita` hanno `indirizzo` (via), `civico`, `comune`, `lat`, `lon`. Le unità in palazzina ereditano l'indirizzo dalla palazzina (sull'unità restano vuoti); le autonome hanno il proprio. `Unita.condizioni` (enum CondizioniImmobile: NUOVO, RISTRUTTURATO, NORMALE, DA_RISTRUTTURARE) → fascia OMI: Ottimo, Ottimo, Normale, Scadente.
+- `ZonaOmi.linkZona` contiene la chiave `CODICECOMUNE:ZONA` (es. `L682:D8`), perché nei KML reali il campo LinkZona è vuoto.
 - `Unita` e `Palazzina` hanno dati di acquisto e vendita (`dataAcquisto`, `prezzoAcquisto`, `costiAcquisto`, ...), `inizioMisura` e `valoreIniziale` (base di partenza), `lat` e `lon`. Su `Unita` anche `omiZona`, `omiTipologia`, `omiStato`.
 - Un acquisto in blocco si registra sulla palazzina e le unità lo ereditano.
 
@@ -102,7 +104,7 @@ Punti da ricordare:
 - Cedolare di competenza e interessi delle dilazioni dentro il risultato operativo.
 - **Finanziamenti** con piano di ammortamento: capitale proprio, ROE, IRR sul capitale proprio, debito residuo, confronto tra costo del debito e rendimento.
 - **Vendite rateali** (compromesso con rate): avanzamento, ritardi, conclusione con rogito o risoluzione.
-- **Valutazione OMI**: valore teorico = superficie catastale × prezzo medio al m² della zona. Ricerca della zona da indirizzo (OpenStreetMap più perimetri KML).
+- **Valutazione OMI**: nel modulo di palazzina/unità si inseriscono via, civico, comune e stato dell'immobile. Al salvataggio l'indirizzo diventa coordinate (OpenStreetMap), le coordinate diventano zona OMI (perimetri KML) e il valore teorico (superficie catastale × €/m² min, max e medio) compare nella sezione «Valutazione da quotazioni OMI» in fondo a Investimenti, per palazzina e per unità. I file OMI (VALORI e ZONE CSV, KML) si scaricano una volta a semestre con SPID e si caricano nella stessa sezione: il semestre si legge dal file.
 - Costo, incasso e margine al giorno per unità (nella dashboard e nella scheda dell'investimento).
 
 **Calendario**: prenotazioni importate dal link iCal di Airbnb o dell'agenzia (le sparite diventano annullate), inserimento manuale, scadenze dei contratti e promemoria di disdetta a 90 e 30 giorni, periodi dei transitori, rate di mutuo, pagamenti ricorrenti, rate delle dilazioni, scadenze IMU e cedolare.
@@ -117,7 +119,8 @@ Punti da ricordare:
 - Le **rate di mutuo** (categoria MUTUO) sono escluse dal rendimento: contano capitale e interessi calcolati dal finanziamento. Costo giornaliero: interessi sì, quota capitale no.
 - Le spese correnti (IMU, condominio, bollette, manutenzione ordinaria) restano nel risultato operativo, **non** nel capitale.
 - Cedolare: 21% di base, il 10% va impostato a mano sui concordati ammessi. Base = canoni di competenza, esclusa l'indennità di occupazione dopo la scadenza. Gli acconti si calcolano sull'imposta stimata dell'anno prima (40% e 60%). **Affitti brevi esclusi**: l'agenzia trattiene e versa, a lui arriva il netto.
-- Le stime OMI valgono solo se manca una stima manuale (perizia o mercato).
+- Le stime OMI valgono solo se manca una stima manuale (perizia o mercato). Ogni salvataggio di un'unità e ogni importazione riscrive la stima OMI di ogni unità (una per semestre) in `ValoreImmobile`.
+- Tipologia OMI scelta dalla categoria catastale: A/1-A/6 abitazioni civili (A/3-A/5 prima «tipo economico»), A/7-A/9 ville e villini, C/6 box, C/1 negozi, A/10 uffici; in mancanza, dal tipo di unità. Se manca la fascia dello stato scelto si usa la Normale e la tabella lo segnala.
 - I pagamenti generati dai versamenti dell'inquilino non si modificano a mano: si usa «Ricalcola attribuzione».
 
 ## 7. Errori già incontrati e risolti
@@ -127,24 +130,25 @@ Punti da ricordare:
 - Il template di `globals.css` rendeva chiaro il testo sulle schede bianche con il telefono in modalità scura: sostituito.
 - Il tema scuro tornava chiaro al ricaricamento: ora si legge dal cookie lato server.
 - `Cell` di Recharts è deprecato: le barre positive e negative sono due serie con `stackId`.
+- Modulo «Registra incasso» senza il campo `data`: l'azione scartava l'invio senza errori. I moduli server action vanno controllati campo per campo rispetto a quello che legge l'azione.
+- `creaUnita` creava l'unità due volte (una prima di controllare gli errori): corretto. L'indirizzo non veniva salvato per le unità in palazzina.
+- Il lettore KML cercava un codice zona tipo `RM00001234` che nei file reali non c'è: ora legge `CODCOM` e `CODZONA`.
 - Importatore OMI: il codice del comune si confronta con **`Comune_amm`** (codice catastale tipo C933) e non con `Comune_cat`.
 
 ## 8. Da verificare (non ancora provato)
 
-- Lettura dei **perimetri KML** dell'OMI: scritta senza un file reale. Se l'importazione non trova il codice della zona, serve il testo dell'errore.
-- Importazione dei CSV OMI con file veri; formato dei decimali e codifica.
-- Download dei perimetri da Geopoi: da controllare se richiede l'accesso all'area riservata.
+- Importazione dei file reali OMI (il formato dei CSV VALORI e ZONE e del KML di Varese L682 è stato letto e il codice scritto di conseguenza, ma non ancora provato nell'app). Zone rurali (R3) non hanno quotazioni: la tabella mostra «nessuna quotazione».
+- Ricerca dell'indirizzo con OpenStreetMap su indirizzi veri (civici mancanti, frazioni): se non trova, c'è il campo coordinate nel modulo.
 - Sincronizzazione iCal con il link reale (e se arrivano solo blocchi «occupato»).
 - Conto della cedolare con i contratti reali (primo anno senza acconti).
 
 ## 9. Aperto in questo momento
 
-**Problema segnalato:** in `/entrate/contratti/[id]/page.jsx` non si registrano più i canoni nuovi. Il file è stato caricato (`/mnt/user-data/uploads/page.jsx`) ma **non è ancora stato letto**. Da controllare:
+**Fatto il 17/10/2026:** eliminata la sezione OMI dedicata (cartella `investimenti/valutazione`, `CardValutazione`, `FormPosizione`). Indirizzo (via, civico, comune), coordinate manuali e stato dell'immobile sono nel modulo palazzina/unità; la sezione con caricamento file e valori min/medio/max sta in fondo a Investimenti. Migrazione Prisma `indirizzo_condizioni` (`civico` su Palazzina e Unita, `condizioni` su Unita).
 
-1. Il modulo «Registra incasso» e l'azione `registraCanone` in `entrate/actions.js`: richiede mese, data e importo, altrimenti ignora l'invio senza errore.
-2. Il campo del mese (`PeriodoSel`): il valore deve essere `AAAA-MM` oppure la chiave del periodo; con un contratto trimestrale cambia il formato.
-3. Moduli annidati dentro altri moduli (HTML non valido: l'invio non parte), e import mancanti dopo le ultime modifiche (`situazioneCanoni`, `etichettaPeriodo`, `BottoneConferma`).
-4. I periodi già coperti da versamenti: la scheda li mostra «da versamento».
+**Da fare dopo la sostituzione dei file:** migrazione, riavvio, poi aprire ogni unità (le esistenti hanno stato «normale» e vanno completate con via e civico) e caricare i tre file OMI di Varese.
+
+**Bug notati e non ancora corretti:** `FormAcquistoVendita` usa `prezzoVendita` e `costiVendita` anche nella sezione Acquisto (il prezzo di acquisto non si può salvare da lì); `investimenti/vendite/page.jsx` non importa `prisma` e ha la chiave `CONCUSA` al posto di `CONCLUSA`; `[tipo]/[id]/page.jsx` ha il link `dest=tipo:${n}` invece di `${tipo}:${n}`; `calendario/page.jsx` ha `unitaBrevi.lenght` e mette un componente dentro una stringa in `periodo`; `eventi.js` ha `c.modalia`; `FormContratto` ha `mod === "REANSITORIO"` e `setCed(e.target.value)` al posto di `checked`.
 
 ## 10. Idee e domande rimaste aperte
 

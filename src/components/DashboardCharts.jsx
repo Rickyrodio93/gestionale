@@ -95,6 +95,7 @@ export function Mensile({ dati, anno }) {
     </Box>
   );
 }
+
 export function Confronto({ righe, anni }) {
   const colori = [INDACO, "#f59e0b", "#94a3b8"];
   return (
@@ -130,6 +131,7 @@ export function Confronto({ righe, anni }) {
     </Box>
   );
 }
+
 export function Annuale({ dati }) {
   const righe = dati.map((d) => ({
     ...d,
@@ -161,6 +163,7 @@ export function Annuale({ dati }) {
     </Box>
   );
 }
+
 export function Categorie({ dati, anno }) {
   return (
     <Box
@@ -252,11 +255,13 @@ export function InvestimentiBar({ dati }) {
       titolo="Investimenti: capitale, risultato e valore"
       sotto="Guadagno netto = risultato operativo + valore − capitale. Senza una stima di valore o una vendita il guadagno non si calcola."
     >
-      <ResponsiveContainer width="100%" height={320}>
+      <ResponsiveContainer width="100%" height={360}>
         <BarChart
           data={righe}
           margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+          
         >
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="nome" {...asse} />
           <YAxis tickFormatter={compatto} width={52} {...asse} />
           <Tooltip formatter={fmt} />

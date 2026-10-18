@@ -2,6 +2,7 @@
 import { useState, useActionState } from "react";
 import { creaUnita, aggiornaUnita } from "@/app/appartamenti/actions";
 import { inputCls } from "@/lib/ui";
+import { CONDIZIONI } from "@/lib/condizioni";
 
 function Sezione({ titolo, children }) {
   return (
@@ -41,6 +42,8 @@ export default function FormUnita({ palazzine, unita }) {
       ? palazzine.find((p) => String(p.id) === String(palSel))
       : null;
   const sorg = scopeEff === "palazzina" ? palCorr : unita;
+  // l'indirizzo è della palazzina oppure, per un'unità autonoma, dell'unità stessa
+  const sorgInd = colloc === "palazzina" ? palCorr : unita;
   const d10 = (x) => (x ? new Date(x).toISOString().slice(0, 10) : "");
   const A = (label, name, def, tipo = "number") => (
     <label className="block">
@@ -80,9 +83,24 @@ export default function FormUnita({ palazzine, unita }) {
     </label>
   );
 
+  // campi dell'indirizzo: non passano da `d`, così cambiano con la palazzina scelta
+  const I = (label, name, o = {}) => (
+    <label key={name} className="block">
+      <span className="mb-1 block text-xs font-medium text-gray-600">
+        {label} {o.required && <span className="text-indigo-600">*</span>}
+      </span>
+      <input
+        name={name}
+        placeholder={o.placeholder}
+        defaultValue={sorgInd?.[name] ?? ""}
+        className={inputCls}
+      />
+    </label>
+  );
+
   return (
     <form action={action} className="max-w-5xl space-y-5">
-      <Sezione titolo="Collocazione">
+      <Sezione titolo="Collocazione e indirizzo">
         <div className="flex gap-6 text-sm sm:col-span-2 lg:col-span-3">
           {[
             ["palazzina", "Fa parte di una palazzina"],
@@ -100,7 +118,7 @@ export default function FormUnita({ palazzine, unita }) {
             </label>
           ))}
         </div>
-        {colloc === "palazzina" ? (
+        {colloc === "palazzina" && (
           <>
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-gray-600">
@@ -120,21 +138,58 @@ export default function FormUnita({ palazzine, unita }) {
                 <option value="nuova">+ Nuova palazzina…</option>
               </select>
             </label>
-            {palSel === "nuova" && (
-              <>
-                {C("Nome nuova palazzina", "nuovaPalazzina", {
-                  required: true,
-                })}
-                {C("Indirizzo", "indirizzo")}
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            {C("Indirizzo", "indirizzo", { required: true })}
-            {C("Comune", "comune", { required: true })}
+            {palSel === "nuova" &&
+              C("Nome nuova palazzina", "nuovaPalazzina", { required: true })}
           </>
         )}
+        <div key={`${colloc}-${palSel}`} className="contents">
+          {I("Via", "indirizzo", {
+            required: true,
+            placeholder: "es. Via Roma",
+          })}
+          {I("Numero civico", "civico", {
+            required: true,
+            placeholder: "es. 10",
+          })}
+          {I("Comune", "comune", { required: true })}
+        </div>
+        <p className="text-xs text-gray-500 sm:col-span-2 lg:col-span-3">
+          {colloc === "palazzina"
+            ? "L'indirizzo è quello della palazzina e vale per tutte le sue unità. "
+            : ""}
+          Dall'indirizzo il gestionale trova da solo la zona OMI e la
+          valutazione (serve aver caricato i file OMI in Investimenti).
+        </p>
+        <details className="text-xs text-gray-600 sm:col-span-2 lg:col-span-3">
+          <summary className="cursor-pointer text-indigo-600">
+            Se l'indirizzo non viene trovato: inserisci le coordinate
+          </summary>
+          <label className="mt-2 block max-w-sm">
+            <span className="mb-1 block font-medium">
+              Coordinate (latitudine, longitudine)
+            </span>
+            <input
+              name="coordinate"
+              placeholder="45.46427, 9.18951"
+              className={inputCls}
+            />
+          </label>
+          <p className="mt-1 text-gray-500">
+            Su Google Maps: clic destro sul punto, la prima riga del menu sono
+            le coordinate.
+          </p>
+        </details>
+        {sorgInd?.lat != null && sorgInd?.lon != null ? (
+          <p className="text-xs text-green-700 sm:col-span-2 lg:col-span-3">
+            Posizione trovata ({sorgInd.lat.toFixed(5)},{" "}
+            {sorgInd.lon.toFixed(5)})
+            {unita?.omiZona ? ` · zona OMI ${unita.omiZona}` : ""}.
+          </p>
+        ) : unita ? (
+          <p className="text-xs text-amber-700 sm:col-span-2 lg:col-span-3">
+            Posizione non ancora trovata.
+          </p>
+        ) : null}
       </Sezione>
 
       <Sezione titolo="Unità">
@@ -160,27 +215,73 @@ export default function FormUnita({ palazzine, unita }) {
         </label>
         {C("Piano", "piano")}
         {C("Interno", "interno")}
-        
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-gray-600">
+            Stato dell'immobile
+          </span>
+          <select
+            name="condizioni"
+            defaultValue={unita?.condizioni ?? "NORMALE"}
+            className={inputCls}
+          >
+            {Object.entries(CONDIZIONI).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="text-xs text-gray-500 sm:col-span-2">
+          Serve per scegliere la fascia OMI: nuovo e ristrutturato → Ottimo,
+          buono → Normale, da ristrutturare → Scadente. Se la zona non ha quella
+          fascia si usa la normale e lo vedi indicato.
+        </p>
       </Sezione>
 
-            <Sezione titolo="Acquisto">
+      <Sezione titolo="Acquisto">
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm sm:col-span-2 lg:col-span-3">
           {[
             ["unita", "Inserisco i dati di questa unità"],
-            ...(colloc === "palazzina" ? [["palazzina", "Il prezzo è dell'intera palazzina (acquistata in blocco)"]] : []),
+            ...(colloc === "palazzina"
+              ? [
+                  [
+                    "palazzina",
+                    "Il prezzo è dell'intera palazzina (acquistata in blocco)",
+                  ],
+                ]
+              : []),
             ["nessuno", "Non inserire ora"],
           ].map(([v, t]) => (
             <label key={v} className="flex items-center gap-2">
-              <input type="radio" name="scopeAcquisto" value={v} checked={scopeEff === v} onChange={() => setScope(v)} />
+              <input
+                type="radio"
+                name="scopeAcquisto"
+                value={v}
+                checked={scopeEff === v}
+                onChange={() => setScope(v)}
+              />
               {t}
             </label>
           ))}
         </div>
         {scopeEff !== "nessuno" && (
           <div key={`${scopeEff}-${palSel}`} className="contents">
-            {A("Data acquisto", "dataAcquisto", d10(sorg?.dataAcquisto), "date")}
-            {A("Prezzo di acquisto (€)", "prezzoAcquisto", sorg?.prezzoAcquisto)}
-            {A("Costi accessori: notaio, imposte, agenzia (€)", "costiAcquisto", sorg?.costiAcquisto)}
+            {A(
+              "Data acquisto",
+              "dataAcquisto",
+              d10(sorg?.dataAcquisto),
+              "date",
+            )}
+            {A(
+              "Prezzo di acquisto (€)",
+              "prezzoAcquisto",
+              sorg?.prezzoAcquisto,
+            )}
+            {A(
+              "Costi accessori: notaio, imposte, agenzia (€)",
+              "costiAcquisto",
+              sorg?.costiAcquisto,
+            )}
           </div>
         )}
         <p className="text-xs text-gray-500 sm:col-span-2 lg:col-span-3">

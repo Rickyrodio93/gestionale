@@ -3,6 +3,7 @@ import { calcolaInvestimenti } from "@/lib/rendimento";
 import { Pencil } from "lucide-react";
 import Link from "next/link";
 import Tooltip, { TooltipRighe } from "@/components/Tooltips";
+import SezioneOmi from "@/components/SezioneOmi";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export default async function Investimenti() {
           >
             Vendite rateali
           </Link>
-          <Link href="/investimenti/valutazione" className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50">Valutazioni OMI</Link>
+          
         </div>
       </div>
 
@@ -426,6 +427,8 @@ export default async function Investimenti() {
             </ul>
           </section>
         )}
+
+        <SezioneOmi />
 
         {risultati.length === 0 && mancanti.length === 0 && (
           <p className="text-sm text-gray-500">Nessun immobile inserito.</p>

@@ -278,14 +278,15 @@ export async function liquidaCauzione(id, fd) {
             unita: { include: { palazzina: true } },
             quote: { include: { pagamenti: true } },
             trattenute: { orderBy: { id: "asc" } },
+            pagamentiInteressi: true,
         },
     });
     if (!c || c.cauzione == null || !c.cauzioneVersataIl || c.cauzioneRestituitaIl) return;
 
-    const k = calcolaCauzione(c);
     const d = new Date(fd.get("data"));
+    const k = calcolaCauzione(c, d); // gli interessi maturano fino alla data di liquidazione
     const r2 = (n) => Math.round(n * 100) / 100;
-    let disp = k.cauzione;
+    let disp = r2(k.cauzione + k.interessi); // cauzione + interessi legali maturati e non ancora pagati
     const ops = [];
 
     for (const m of k.mesiAperti) {
@@ -307,7 +308,7 @@ export async function liquidaCauzione(id, fd) {
         ops.push(prisma.trattenutaCauzione.update({ where: { id: t.id }, data: { applicato: r2(x) } }));
         disp = r2(disp - x);
     }
-    ops.push(prisma.contratto.update({ where: { id }, data: { cauzioneRestituitaIl: d, cauzioneRestituita: r2(disp) } }));
+    ops.push(prisma.contratto.update({ where: { id }, data: { cauzioneRestituitaIl: d, cauzioneRestituita: r2(disp), interessiLiquidati: k.interessi } }));
 
     await prisma.$transaction(ops);
     aggiorna(id);
@@ -319,7 +320,7 @@ export async function annullaLiquidazione(id) {
         prisma.pagamentoCanone.deleteMany({ where: { contrattoId: id, daCauzione: true } }),
         prisma.pagamento.deleteMany({ where: { daCauzione: true, quota: { contrattoId: id } } }),
         prisma.trattenutaCauzione.updateMany({ where: { contrattoId: id }, data: { applicato: null } }),
-        prisma.contratto.update({ where: { id }, data: { cauzioneRestituitaIl: null, cauzioneRestituita: null } }),
+        prisma.contratto.update({ where: { id }, data: { cauzioneRestituitaIl: null, cauzioneRestituita: null, interessiLiquidati: null } }),
     ]);
     aggiorna(id);
     revalidatePath("/spese/bollette");
@@ -356,10 +357,12 @@ export async function rinnovaConCondizioni(id, _prev, fd) {
                 aliquotaCedolare: c.aliquotaCedolare,
                 precedenteId: c.id,
                 periodicitaMesi: c.periodicitaMesi, ancoraPeriodi: c.ancoraPeriodi,
-                ...(portaCauzione && { cauzione: c.cauzione, cauzioneVersataIl: c.cauzioneVersataIl }),
+                ...(portaCauzione && { cauzione: c.cauzione, cauzioneVersataIl: c.cauzioneVersataIl, tassoCauzione: c.tassoCauzione }),
             },
         });
         if (portaCauzione) await tx.trattenutaCauzione.updateMany({ where: { contrattoId: id }, data: { contrattoId: n.id } });
+        // gli interessi seguono la cauzione: maturano dalla data di versamento originale
+        if (portaCauzione) await tx.pagamentoInteresse.updateMany({ where: { contrattoId: id }, data: { contrattoId: n.id } });
         await tx.contratto.update({
             where: { id },
             data: {
@@ -367,7 +370,7 @@ export async function rinnovaConCondizioni(id, _prev, fd) {
                 inOccupazione: false,
                 disdettaInviataIl: null,
                 disdettaNote: null,
-                ...(portaCauzione && { cauzione: null, cauzioneVersataIl: null }),
+                ...(portaCauzione && { cauzione: null, cauzioneVersataIl: null, tassoCauzione: null }),
             },
         });
         return n;

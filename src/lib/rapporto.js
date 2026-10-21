@@ -3,6 +3,7 @@ import { etichettaPeriodo, situazioneCanoni } from "@/lib/canoni";
 import { CONTRATTI_INCLUDE } from "@/lib/versamenti";
 import { TIPI } from "@/lib/bollette";
 import { dataIt } from "@/lib/format";
+import { interessiCauzione } from "@/lib/interessiCauzione";
 
 const r2 = (n) => Math.round(n * 100) / 100;
 const somma = (a) => a.reduce((t, x) => t + x, 0);
@@ -15,7 +16,7 @@ export async function costruisciRapporto(inquilinoId) {
 
     const contratti = await prisma.contratto.findMany({
         where: { inquilinoId, tipo: "LUNGO" },
-        include: { ...CONTRATTI_INCLUDE, trattenute: true },
+        include: { ...CONTRATTI_INCLUDE, trattenute: true, pagamentiInteressi: true },
         orderBy: { dataInizio: "asc" },
     });
     const versamentiDb = await prisma.versamento.findMany({
@@ -80,6 +81,11 @@ export async function costruisciRapporto(inquilinoId) {
     const aperte = contratti.filter((c) => c.cauzione && c.cauzioneVersataIl && !c.cauzioneRestituitaIl);
     const detenuta = r2(somma(aperte.map((c) => c.cauzione)));
     const trattenute = r2(somma(aperte.flatMap((c) => c.trattenute.map((t) => t.importo))));
+    // interessi legali maturati e non ancora pagati: credito dell'inquilino, si sommano alla cauzione detenuta
+    const interessi = r2(somma(aperte.map((c) => interessiCauzione(c)?.daPagare ?? 0)));
+    const tabelleInteressi = contratti
+        .filter((c) => c.cauzione > 0 && c.cauzioneVersataIl)
+        .map((c) => ({ unita: c.unita.nome, cauzione: c.cauzione, ...interessiCauzione(c) }));
     const daVersare = r2(
         somma(contratti.filter((c) => c.cauzione && !c.cauzioneVersataIl && !c.cauzioneRestituitaIl).map((c) => c.cauzione))
     );
@@ -90,15 +96,16 @@ export async function costruisciRapporto(inquilinoId) {
             data: c.cauzioneRestituitaIl,
             cauzione: c.cauzione,
             restituito: c.cauzioneRestituita ?? 0,
-            trattenuto: r2(c.cauzione - (c.cauzioneRestituita ?? 0)),
+            interessi: r2(c.interessiLiquidati ?? 0),
+            trattenuto: r2(c.cauzione + (c.interessiLiquidati ?? 0) - (c.cauzioneRestituita ?? 0)),
         }));
 
     return {
-        inquilino, contratti, canoni, spese, totCanoni, totSpese, versamenti, credito, ultimo, residuo,
+        inquilino, contratti, canoni, spese, tabelleInteressi, totCanoni, totSpese, versamenti, credito, ultimo, residuo,
         versatoTot: r2(somma(versamentiDb.map((v) => v.importo))),
         cauzione: {
-            detenuta, trattenute, daVersare, liquidate,
-            saldo: r2(residuo + trattenute - detenuta), // > 0: ancora da incassare; <= 0: da restituire
+            detenuta, trattenute, daVersare, liquidate, interessi,
+            saldo: r2(residuo + trattenute - detenuta - interessi), // > 0: ancora da incassare; <= 0: da restituire
         },
     };
 }

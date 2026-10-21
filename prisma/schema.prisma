@@ -253,6 +253,9 @@ model Contratto {
   periodicitaMesi      Int                  @default(1)
   ancoraPeriodi        DateTime?
   aliquotaCedolare     Float?
+  tassoCauzione        Float?
+  interessiLiquidati   Float?
+  pagamentiInteressi   PagamentoInteresse[]
 }
 
 // Contatore generale della palazzina (unitaId nullo) o divisionale di un'unità
@@ -569,4 +572,13 @@ enum CondizioniImmobile {
   RISTRUTTURATO
   NORMALE
   DA_RISTRUTTURARE
+}
+
+model PagamentoInteresse {
+  id          Int       @id @default(autoincrement())
+  contratto   Contratto @relation(fields: [contrattoId], references: [id], onDelete: Cascade)
+  contrattoId Int
+  data        DateTime
+  importo     Float
+  note        String?
 }

@@ -8,6 +8,8 @@ import {
   Legend,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -154,10 +156,32 @@ export function Annuale({ dati }) {
           <Tooltip formatter={fmt} />
           <Legend />
           <ReferenceLine y={0} stroke="#9ca3af" />
-          <Bar dataKey="entrate" name="Entrate" fill="#86efac" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="uscite" name="Uscite" fill="#fca5a5" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="utile" name="Risultato (utile)" stackId="risultato" fill="#15803d" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="perdita" name="Risultato (perdita)" stackId="risultato" fill="#b91c1c" radius={[4, 4, 0, 0]} />
+          <Bar
+            dataKey="entrate"
+            name="Entrate"
+            fill="#86efac"
+            radius={[4, 4, 0, 0]}
+          />
+          <Bar
+            dataKey="uscite"
+            name="Uscite"
+            fill="#fca5a5"
+            radius={[4, 4, 0, 0]}
+          />
+          <Bar
+            dataKey="utile"
+            name="Risultato (utile)"
+            stackId="risultato"
+            fill="#15803d"
+            radius={[4, 4, 0, 0]}
+          />
+          <Bar
+            dataKey="perdita"
+            name="Risultato (perdita)"
+            stackId="risultato"
+            fill="#b91c1c"
+            radius={[4, 4, 0, 0]}
+          />
         </BarChart>
       </ResponsiveContainer>
     </Box>
@@ -259,7 +283,6 @@ export function InvestimentiBar({ dati }) {
         <BarChart
           data={righe}
           margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-          
         >
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="nome" {...asse} />
@@ -297,7 +320,7 @@ export function InvestimentiBar({ dati }) {
             name="Perdita netta"
             stackId="guadagno"
             fill={ROSSO}
-            radius={[0, 0, 4, 4]}
+            radius={[4, 4, 0, 0]}
           />
         </BarChart>
       </ResponsiveContainer>
@@ -395,6 +418,70 @@ export function Occupazione({ dati, anno }) {
           />
         </ComposedChart>
       </ResponsiveContainer>
+    </Box>
+  );
+}
+
+// Torta ad anello: ogni fetta ha { nome, valore, fill }. Il totale al centro è la somma delle fette.
+export function Composizione({ titolo, sotto, fette }) {
+  const tot = fette.reduce((t, f) => t + f.valore, 0);
+  const perc = (v) => {
+    const p = (v / tot) * 100;
+    return p > 0 && p < 1 ? "<1%" : `${p.toFixed(0)}%`;
+  };
+  return (
+    <Box titolo={titolo} sotto={sotto}>
+      {fette.length === 0 ? (
+        <p className="text-sm text-gray-500">Nessun movimento nel periodo</p>
+      ) : (
+        <div className="flex flex-col items-center gap-5 sm:flex-row">
+          <div className="relative h-48 w-48 shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={fette}
+                  dataKey="valore"
+                  nameKey="nome"
+                  innerRadius="62%"
+                  outerRadius="100%"
+                  paddingAngle={fette.length > 1 ? 2 : 0}
+                  stroke="none"
+                  startAngle={90}
+                  endAngle={-270}
+                  isAnimationActive={false}
+                />
+                <Tooltip formatter={(v, n) => [fmt(v), n]} />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* legenda */}
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-xs text-gray-500">Totale</span>
+              <span className="text-lg font-semibold tabular-nums">
+                {eur(tot)}
+              </span>
+            </div>
+          </div>
+          <ul className="w-full space-y-1.5 text-sm">
+            {[...fette]
+              .sort((a, b) => b.valore - a.valore)
+              .map((f) => (
+                <li key={f.nome} className="flex items-center gap-2">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: f.fill }}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{f.nome}</span>
+                  <span className="tabular-nums text-gray-600">
+                    {fmt(f.valore)}
+                  </span>
+                  <span className="w-10 text-right text-xs tabular-nums text-gray-500">
+                    {perc(f.valore)}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
     </Box>
   );
 }

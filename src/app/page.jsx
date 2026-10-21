@@ -7,11 +7,13 @@ import {
   InvestimentiBar,
   DebitoChart,
   Occupazione,
+  Composizione,
 } from "@/components/DashboardCharts";
 
 import {
   caricaMovimenti,
   CAT_USCITE,
+  CAT_ENTRATE,
   MESI,
   perCategoria,
   perChiave,
@@ -30,7 +32,15 @@ import { dataIt, eur } from "@/lib/format";
 import { imuStimata } from "@/lib/imu";
 import { prisma } from "@/lib/prisma";
 import { coloriScadenza, statoScadenza } from "@/lib/scadenze";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarDays,
+  Landmark,
+  Receipt,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 import Link from "next/link";
 import { etichetta } from "@/lib/scadenze";
 import { stimaCedolare } from "@/lib/cedolare";
@@ -41,6 +51,28 @@ import Tooltip, { TooltipRighe } from "@/components/Tooltips";
 export const dynamic = "force-dynamic";
 
 const r2 = (n) => Math.round(n * 100) / 100;
+
+// colori delle fette delle torte: uno per categoria, sempre lo stesso
+const COL_USCITE = {
+  BOLLETTE: "#0ea5e9",
+  IMU: "#4f46e5",
+  CEDOLARE: "#f59e0b",
+  CONDOMINIO: "#14b8a6",
+  ORDINARIA: "#8b5cf6",
+  STRAORDINARIA: "#ec4899",
+  MUTUO: "#64748b",
+  ALTRO: "#9ca3af",
+};
+const COL_ENTRATE = {
+  LUNGHI: "#4f46e5",
+  BREVI: "#16a34a",
+  TRANSITORI: "#06b6d4",
+  TRATTENUTE: "#f59e0b",
+};
+const TONI = {
+  rosso: "border-red-200 bg-red-50 text-red-900 hover:bg-red-100",
+  ocra: "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100",
+};
 
 function Delta({ cur, prev, invert = false, anno }) {
   if (!prev)
@@ -74,7 +106,7 @@ function prossimaImu(oggi) {
   const t0 = new Date(y, oggi.getMonth(), oggi.getDate());
   const c = [
     [new Date(y, 5, 16), "acconto"],
-    [new Date(y, 5, 16), "saldo"],
+    [new Date(y, 11, 16), "saldo"],
     [new Date(y + 1, 5, 16), "acconto"],
   ];
   return c.find(([d]) => d >= t0);
@@ -213,7 +245,7 @@ export default async function Dashboard({ searchParams }) {
                   titolo="Costi nel periodo"
                   righe={costiDett}
                   totale={["Totale", eur(r.costo)]}
-                  nota={`${eur(r.costoDie)} al giorno. Quota capitale delle rate e lavori staordinari esclusi.`}
+                  nota={`${eur(r.costoDie)} al giorno. Quota capitale delle rate e lavori straordinari esclusi.`}
                 />
               }
             >
@@ -318,6 +350,67 @@ export default async function Dashboard({ searchParams }) {
   );
   const nextImu = prossimaImu(oggi);
 
+  // cosa richiede attenzione ora
+  const giorniImu = nextImu
+    ? Math.ceil(
+        (nextImu[0] -
+          new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate())) /
+          86400000,
+      )
+    : null;
+  const urgenti = scadenze.filter((x) =>
+    ["urgente", "termine_superato", "scaduto", "in_occupazione"].includes(
+      x.s.livello,
+    ),
+  );
+  const attenzioni = [
+    scadenze.length > 0 && {
+      href: "#scadenze",
+      icon: CalendarDays,
+      tono: urgenti.length > 0 ? "rosso" : "ocra",
+      titolo: `${scadenze.length} contratt${scadenze.length === 1 ? "o" : "i"} da seguire`,
+      sub: `${scadenze[0].c.unita.nome}: ${etichetta(scadenze[0].s)}`,
+    },
+    arretrati > 0.005 && {
+      href: "/entrate",
+      icon: Wallet,
+      tono: "rosso",
+      titolo: `${eur(arretrati)} di canoni arretrati`,
+      sub: "mesi precedenti non incassati",
+    },
+    crediti > 0.005 && {
+      href: "/spese/bollette?anno=tutti&stato=daincassare",
+      icon: Receipt,
+      tono: "ocra",
+      titolo: `${eur(crediti)} di bollette da incassare`,
+      sub: "rimborsi ancora dovuti dagli inquilini",
+    },
+    dilAperte > 0.005 && {
+      href: "/spese/dilazioni",
+      icon: Landmark,
+      tono: "rosso",
+      titolo: `${eur(dilAperte)} di rate da pagare`,
+      sub: "dilazioni della cedolare",
+    },
+    giorniImu != null &&
+      giorniImu <= 45 &&
+      stimaImu > 0 && {
+        href: "/spese",
+        icon: Landmark,
+        tono: "ocra",
+        titolo: `IMU ${nextImu[1]}: ${dataIt(nextImu[0])}`,
+        sub: `tra ${giorniImu} giorni · circa ${eur(stimaImu / 2)}`,
+      },
+  ].filter(Boolean);
+
+  // torte: la somma delle fette è sempre uguale al totale mostrato sopra
+  const fette = (valori, nomi, colori) =>
+    Object.keys(nomi)
+      .filter((k) => (valori[k] ?? 0) > 0.005)
+      .map((k) => ({ nome: nomi[k], valore: valori[k], fill: colori[k] }));
+  const fetteEntrate = fette(eSel, CAT_ENTRATE, COL_ENTRATE);
+  const fetteUscite = fette(uSel, CAT_USCITE, COL_USCITE);
+
   const utile = tot.risultato >= 0;
   const margine =
     tot.entrate > 0
@@ -348,7 +441,7 @@ export default async function Dashboard({ searchParams }) {
 
       <div className="space-y-5">
         {/* esito */}
-        <section className={``}>
+        <section className="grid gap-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm lg:grid-cols-[1fr_auto] lg:items-center">
           <div className="flex items-center gap-4">
             <div
               className={`rounded-full p-3 ${utile ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
@@ -357,12 +450,12 @@ export default async function Dashboard({ searchParams }) {
             </div>
             <div>
               <p
-                className={`text-sm font-semibold uppercase tracking-wide ${utile ? "text-green-700" : "text-red-700"}`}
+                className={`text-sm font-semibold uppercase tracking-wide ${utile ? "text-green-800" : "text-red-700"}`}
               >
-                {utile ? "In utile" : "In perdita"} {periodo}
+                {utile ? "In utile" : "In perdita"} · {periodo}
               </p>
               <p
-                className={`text-4xl font-bold ${utile ? "text-green-700" : "text-red-700"}`}
+                className={`text-4xl font-bold tabular-nums ${utile ? "text-green-700" : "text-red-700"}`}
               >
                 {utile ? "+" : "-"}
                 {eur(Math.abs(tot.risultato))}
@@ -370,7 +463,7 @@ export default async function Dashboard({ searchParams }) {
             </div>
           </div>
 
-          <div className="text-right text-sm text-gray-700">
+          <div className="space-y-1 text-sm text-gray-700 lg:text-right">
             {haPrev ? (
               <>
                 <p>
@@ -393,8 +486,12 @@ export default async function Dashboard({ searchParams }) {
               </p>
             )}
             {(cedMat.imposta > 0 || cedolarePagata > 0) && (
-              <p className="mt-2 text-xs text-gray-600">
-                Per competenza (cedolare maturata ≈ {eur(cedMat.imposta)}):{" "}
+              <p className="pt-1 text-xs text-gray-600">
+                Per competenza (cedolare maturata ≈ {eur(cedMat.imposta)}
+                {interessi > 0
+                  ? `, inclusi ${eur(interessi)} di interessi e sanzioni pagati`
+                  : ""}
+                ):{" "}
                 <b
                   className={
                     risCompetenza >= 0 ? "text-green-700" : "text-red-700"
@@ -404,17 +501,70 @@ export default async function Dashboard({ searchParams }) {
                 </b>
               </p>
             )}
-            {interessi > 0 && (
-              <span>
-                {" "}
-                (inclusi ${eur(interessi)} di interessi e sanzioni pagati)
-              </span>
-            )}
           </div>
+
+          {tot.entrate > 0 && (
+            <div className="lg:col-span-2">
+              <div className="mb-1 flex flex-wrap justify-between gap-x-4 text-xs text-gray-500">
+                <span>Entrate {eur(tot.entrate)}</span>
+                <span>
+                  Uscite {eur(tot.uscite)} (
+                  {Math.round((tot.uscite / tot.entrate) * 100)}% delle entrate)
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-green-200">
+                <div
+                  className="h-2 rounded-full bg-red-500"
+                  style={{
+                    width: `${Math.min(100, (tot.uscite / tot.entrate) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* cosa richiede attenzione */}
+        <section aria-labelledby="attenzione">
+          <h2
+            id="attenzione"
+            className="mb-2 text-sm font-semibold text-gray-700"
+          >
+            Cosa richiede attenzione
+          </h2>
+          {attenzioni.length === 0 ? (
+            <p className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+              Tutto in regola: nessuna scadenza vicina, arretrato o rata da
+              pagare.
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {attenzioni.map((x) => {
+                const Icona = x.icon;
+                return (
+                  <Link
+                    key={x.titolo}
+                    href={x.href}
+                    className={`group flex items-start gap-3 rounded-xl border p-4 ${TONI[x.tono]}`}
+                  >
+                    <Icona size={20} className="mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">{x.titolo}</p>
+                      <p className="truncate text-xs opacity-80">{x.sub}</p>
+                    </div>
+                    <ArrowRight
+                      size={16}
+                      className="mt-1 shrink-0 opacity-50 group-hover:opacity-100"
+                    />
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* indicatori */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <Kpi
             label="Entrate"
             value={eur(tot.entrate)}
@@ -422,39 +572,10 @@ export default async function Dashboard({ searchParams }) {
           >
             <Delta cur={tot.entrate} prev={totPrev.entrate} anno={prev} />
           </Kpi>
-
           <Kpi label="Uscite" value={eur(tot.uscite)}>
             <Delta cur={tot.uscite} prev={totPrev.uscite} invert anno={prev} />
           </Kpi>
-
-          <Kpi label="Margine" value={margine} sub="risultato entrate" />
-
-          <Kpi
-            label="Bollette da incassare"
-            value={eur(crediti)}
-            sub="rimborsi ancora dovuti dagli inquilini"
-          >
-            <Link
-              href="/spese/bollette?anno=tutti&stato=daincassare"
-              className="text-xs text-indigo-600 hover:underline"
-            >
-              Vedi elenco
-            </Link>
-          </Kpi>
-
-          <Kpi
-            label="Canoni arretrati"
-            value={eur(arretrati)}
-            sub="mesi precedenti non incassati"
-          >
-            <Link
-              href="/entrate"
-              className="text-xs text-indigo-600 hover:underline"
-            >
-              Vedi contratti
-            </Link>
-          </Kpi>
-
+          <Kpi label="Margine" value={margine} sub="risultato su entrate" />
           {(cedAnno.righe.length > 0 || dilAperte > 0) && (
             <Kpi
               label={`Cedolare secca ${anno}`}
@@ -467,14 +588,6 @@ export default async function Dashboard({ searchParams }) {
               >
                 Vedi calcolo
               </Link>
-              {dilAperte > 0 && (
-                <Link
-                  href="/spese/dilazioni"
-                  className="ml-3 text-xs text-red-700 hover:underline"
-                >
-                  Rate da pagare: {eur(dilAperte)}
-                </Link>
-              )}
             </Kpi>
           )}
         </div>
@@ -482,13 +595,25 @@ export default async function Dashboard({ searchParams }) {
         {/* grafici */}
         <Mensile dati={serieSel} anno={anno} />
         <div className="grid gap-5 lg:grid-cols-2">
+          <Composizione
+            titolo="Da dove arrivano le entrate"
+            sotto={`${periodo}: composizione per tipo di affitto.`}
+            fette={fetteEntrate}
+          />
+          <Composizione
+            titolo="Dove vanno le uscite"
+            sotto={`${periodo}: composizione per categoria. Il confronto con ${prev} è nel grafico a barre qui sotto.`}
+            fette={fetteUscite}
+          />
+        </div>
+        <div className="grid gap-5 lg:grid-cols-2">
           <Confronto righe={righeConfronto} anni={anniConfronto} />
           <Annuale dati={annuale} />
           <Categorie dati={categorie} anno={anno} />
 
           <section className="rounded-xl border border-gray-200 p-5 bg-white shadow-sm">
             <h2 className="font-semibold">Risultato per palazzina</h2>
-            <p>
+            <p className="mb-3 text-xs text-gray-500">
               Include le spese sulla palazzina e quelle sulle sue unità.{" "}
               {periodo}
             </p>
@@ -498,9 +623,9 @@ export default async function Dashboard({ searchParams }) {
               </p>
             ) : (
               <table className="w-full">
-                <thead>
+                <thead className="text-left text-xs text-gray-500">
                   <tr>
-                    <th className="pb-2">Palzzina / unità</th>
+                    <th className="pb-2">Palazzina / unità</th>
                     <th className="text-right">Entrate</th>
                     <th className="text-right">Uscite</th>
                     <th className="text-right">Risultato</th>
@@ -533,7 +658,7 @@ export default async function Dashboard({ searchParams }) {
         </h2>
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <h2 className="font-semibold">Costo e incasso al giorno</h2>
-          <p className="mb-3 text-cs text-gray-500">
+          <p className="mb-3 text-xs text-gray-500">
             {periodo}, sui giorni di possesso. Passa il mouse (o tocca) sui
             valori sottolineati per il dettaglio. I costi della palazzina sono
             ripartiti sulle unità per superficie catastale (in parti uguali se
@@ -592,7 +717,10 @@ export default async function Dashboard({ searchParams }) {
 
         {/* scadenze */}
         <div className="grid gap-5 lg:grid-cols-2">
-          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section
+            id="scadenze"
+            className="scroll-mt-20 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+          >
             <h2 className="mb-3 font-semibold">
               Contratti da tenere d&apos;occhio
             </h2>

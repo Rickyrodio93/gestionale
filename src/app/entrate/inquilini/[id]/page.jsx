@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Check, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, RefreshCw } from "lucide-react";
 import { costruisciRapporto } from "@/lib/rapporto";
 import { LOCATORE } from "@/lib/config";
 import { eur, dataIt } from "@/lib/format";
@@ -324,6 +324,12 @@ export default async function Posizione({ params }) {
                     />
                   )}
                   <Voce l="Cauzione detenuta" v={eur(cz.detenuta)} />
+                  {cz.interessi > 0.005 && (
+                    <Voce
+                      l="+ Interessi legali maturati sulla cauzione"
+                      v={eur(cz.interessi)}
+                    />
+                  )}
                   <div
                     className={`mt-1 flex justify-between border-t border-gray-300 pt-2 text-base font-bold ${cz.saldo > 0.005 ? "text-red-700" : "text-green-700"}`}
                   >
@@ -346,7 +352,9 @@ export default async function Posizione({ params }) {
 
               {cz.liquidate.map((l, i) => (
                 <p key={i} className="mt-2 text-xs text-gray-600">
-                  Cauzione liquidata il {dataIt(l.data)} ({l.unita}): su {eur(l.cauzione)}, trattenuti {eur(l.trattenuto)} a copertura dei debiti,
+                  Cauzione liquidata il {dataIt(l.data)} ({l.unita}): su {eur(l.cauzione)}
+                  {l.interessi > 0.005 &&
+                    ` più ${eur(l.interessi)} di interessi legali`}, trattenuti {eur(l.trattenuto)} a copertura dei debiti,
                 restituiti {eur(l.restituito)}.
                 </p>
               ))}
@@ -363,6 +371,62 @@ export default async function Posizione({ params }) {
           Firma locatore: _________________________
         </p>
       </section>
+
+      {r.tabelleInteressi.length > 0 && (
+        <section className={card}>
+          <h2 className="mb-1 font-semibold">
+            Interessi legali sulla cauzione
+          </h2>
+          <p className="mb-3 text-xs text-gray-500">
+            Maturano giorno per giorno dalla data di versamento, al tasso legale
+            dell'anno (o a quello indicato nel contratto), sulla cauzione
+            versata.
+          </p>
+          {r.tabelleInteressi.map((t, i) => (
+            <div key={i} className="mb-4 last:mb-0">
+              <p className="mb-1 text-sm font-medium">
+                {t.unita} · cauzione {eur(t.cauzione)}
+                {t.liquidata ? " · liquidata" : ""}
+              </p>
+              <table className="w-full">
+                <thead className="text-left text-xs text-gray-500">
+                  <tr>
+                    <th className="pb-2">Anno</th>
+                    <th>Periodo</th>
+                    <th className="text-right">Giorni</th>
+                    <th className="text-right">Tasso</th>
+                    <th className="text-right">Interessi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {t.righe.map((x) => (
+                    <tr key={x.anno} className="border-t border-gray-100 text-sm">
+                      <td className="py-1.5">{x.anno}</td>
+                      <td className="flex items-center gap-1">
+                        {dataIt(x.dal)} <ArrowRight size={16}/> {dataIt(x.al)}
+                      </td>
+                      <td className="text-right">{x.giorni}</td>
+                      <td className="text-right">
+                        {String(x.tasso).replace(".", ",")}%
+                      </td>
+                      <td className="text-right">{eur(x.interessi)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-gray-300 text-sm font-semibold">
+                    <td className="pt-2" colSpan={4}>
+                      Maturati · già pagati {eur(t.pagati)} · da riconoscere{" "}
+                      {eur(t.daPagare)}
+                    </td>
+                    <td className="pt-2 text-right">{eur(t.maturato)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* ---- gestione (non si stampa) ---- */}
       <section className={`${card} print:hidden`}>

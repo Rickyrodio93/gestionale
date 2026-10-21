@@ -10,6 +10,7 @@ import { situazioneCanoni, STATI_CANONE, etichettaPeriodo } from "@/lib/canoni";
 import BottoneElimina from "@/components/BottoneElimina";
 import { dataAcq } from "@/lib/investimento";
 import { calcolaCauzione } from "@/lib/cauzione";
+import { interessiCauzione, tassoLegale } from "@/lib/interessiCauzione";
 import FormRinnovo from "@/components/FormRinnovo";
 import {
   segnaDisdetta,
@@ -32,6 +33,12 @@ import {
   liquidaCauzione,
   annullaLiquidazione,
 } from "@/app/entrate/actions";
+import {
+  registraInteresse,
+  aggiornaInteresse,
+  eliminaInteresse,
+  impostaTassoCauzione,
+} from "@/app/entrate/interessiActions";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +85,7 @@ export default async function Scheda({ params }) {
       canoni: { orderBy: { data: "desc" } },
       quote: { include: { pagamenti: true } },
       trattenute: { orderBy: { id: "asc" } },
+      pagamentiInteressi: { orderBy: { data: "asc" } },
     },
   });
   if (!c) notFound();
@@ -604,7 +612,12 @@ export default async function Scheda({ params }) {
           const liq = !!c.cauzioneRestituitaIl;
           const k = calcolaCauzione(c);
           const trattenuto =
-            Math.round((c.cauzione - (c.cauzioneRestituita ?? 0)) * 100) / 100;
+            Math.round(
+              (c.cauzione +
+                (c.interessiLiquidati ?? 0) -
+                (c.cauzioneRestituita ?? 0)) *
+                100,
+            ) / 100;
           const riga = (label, value, forte) => (
             <div
               key={label}
@@ -644,6 +657,11 @@ export default async function Scheda({ params }) {
               {liq ? (
                 <div>
                   {riga("Cauzione versata", eur(c.cauzione))}
+                  {(c.interessiLiquidati ?? 0) > 0.005 &&
+                    riga(
+                      "+ Interessi legali riconosciuti",
+                      eur(c.interessiLiquidati),
+                    )}
                   {riga("Trattenuto", eur(trattenuto))}
                   {riga(
                     "Restituito all'inquilino",
@@ -674,6 +692,8 @@ export default async function Scheda({ params }) {
               ) : c.cauzioneVersataIl ? (
                 <>
                   {riga("Cauzione versata", eur(k.cauzione))}
+                  {k.interessi > 0.005 &&
+                    riga("+ Interessi legali maturati", eur(k.interessi))}
                   {riga(
                     "− Canoni non incassati (incluso il mese in corso)",
                     eur(k.canoni),
@@ -786,6 +806,223 @@ export default async function Scheda({ params }) {
                   </form>
                 </>
               ) : null}
+            </section>
+          );
+        })()}
+      {c.cauzione != null &&
+        c.cauzioneVersataIl &&
+        (() => {
+          const ic = interessiCauzione(c);
+          const liq = !!c.cauzioneRestituitaIl;
+          const stimati = ic.righe.some((r) => r.stimato);
+          return (
+            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-1 font-semibold">
+                Interessi legali sulla cauzione
+              </h2>
+              <p className="mb-4 text-xs text-gray-500">
+                Per le locazioni abitative la cauzione produce interessi legali,
+                da riconoscere all&apos;inquilino alla fine di ogni anno o alla
+                restituzione (art. 11 L. 392/1978). Qui maturano giorno per
+                giorno dal versamento ({dataIt(c.cauzioneVersataIl)}
+                ), al tasso legale dell&apos;anno o a quello indicato sotto.
+                Sono una stima di supporto: verifica con il tuo professionista.
+              </p>
+
+              <dl className="grid gap-4 sm:grid-cols-4">
+                <Dato label="Maturati">{eur(ic.maturato)}</Dato>
+                <Dato label="Già pagati">{eur(ic.pagati)}</Dato>
+                <Dato label="Ancora da riconoscere">{eur(ic.daPagare)}</Dato>
+                <Dato label="Di anni già conclusi, da pagare">
+                  {eur(ic.esigibileDaPagare)}
+                </Dato>
+              </dl>
+
+              <table className="mt-4 w-full">
+                <thead className="text-left text-xs text-gray-500">
+                  <tr>
+                    <th className="pb-2">Anno</th>
+                    <th>Periodo</th>
+                    <th className="text-right">Giorni</th>
+                    <th className="text-right">Tasso</th>
+                    <th className="text-right">Interessi</th>
+                    <th className="pl-4">Stato</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ic.righe.map((r) => (
+                    <tr
+                      key={r.anno}
+                      className="border-t border-gray-100 text-sm"
+                    >
+                      <td className="py-1.5">{r.anno}</td>
+                      <td>
+                        {dataIt(r.dal)} → {dataIt(r.al)}
+                      </td>
+                      <td className="text-right">{r.giorni}</td>
+                      <td className="text-right">
+                        {String(r.tasso).replace(".", ",")}%
+                        {r.personalizzato ? " *" : ""}
+                        {r.stimato ? " ≈" : ""}
+                      </td>
+                      <td className="text-right">{eur(r.interessi)}</td>
+                      <td className="pl-4 text-xs text-gray-600">
+                        {r.esigibile ? "maturati" : "in maturazione"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {stimati && (
+                <p className="mt-1 text-xs text-amber-700">
+                  ≈ Per l&apos;anno in corso il tasso legale non è ancora nella
+                  tabella: uso quello dell&apos;ultimo anno noto. Aggiornalo in
+                  src/lib/interessiCauzione.js quando esce il decreto del MEF.
+                </p>
+              )}
+              {ic.righe.some((r) => r.personalizzato) && (
+                <p className="mt-1 text-xs text-gray-500">
+                  * tasso indicato da te, non quello legale.
+                </p>
+              )}
+
+              <h3 className="mb-2 mt-5 text-xs font-medium text-gray-600">
+                Interessi pagati all&apos;inquilino
+              </h3>
+              {c.pagamentiInteressi.length === 0 && (
+                <p className="text-sm text-gray-500">
+                  Nessun pagamento di interessi registrato.
+                </p>
+              )}
+              <div className="space-y-2">
+                {c.pagamentiInteressi.map((p) =>
+                  liq ? (
+                    <p key={p.id} className="text-sm text-gray-600">
+                      {dataIt(p.data)} · {eur(p.importo)}
+                      {p.note ? ` · ${p.note}` : ""}
+                    </p>
+                  ) : (
+                    <div key={p.id} className="flex items-center gap-2">
+                      <form
+                        action={aggiornaInteresse.bind(null, p.id, c.id)}
+                        className="flex flex-wrap items-center gap-2"
+                      >
+                        <input
+                          type="date"
+                          name="data"
+                          defaultValue={p.data.toISOString().slice(0, 10)}
+                          required
+                          className={mini}
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="importo"
+                          defaultValue={p.importo}
+                          required
+                          className={`${mini} w-28`}
+                        />
+                        <input
+                          name="note"
+                          defaultValue={p.note ?? ""}
+                          placeholder="Note"
+                          className={`${mini} w-44`}
+                        />
+                        <button
+                          className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100"
+                          title="Salva modifica"
+                        >
+                          <Check size={16} />
+                        </button>
+                      </form>
+                      <BottoneElimina
+                        action={eliminaInteresse.bind(null, p.id, c.id)}
+                        messaggio="Eliminare questo pagamento di interessi?"
+                      />
+                    </div>
+                  ),
+                )}
+              </div>
+
+              {liq ? (
+                <p className="mt-3 text-xs text-gray-500">
+                  Cauzione liquidata il {dataIt(c.cauzioneRestituitaIl)}: gli
+                  interessi fino a quel giorno ({eur(ic.maturato)}) sono stati
+                  riconosciuti
+                  {(c.interessiLiquidati ?? 0) > 0.005
+                    ? ` (${eur(c.interessiLiquidati)} insieme alla cauzione)`
+                    : ""}
+                  . Per modificarli annulla prima la liquidazione.
+                </p>
+              ) : (
+                <>
+                  <form
+                    action={registraInteresse.bind(null, c.id)}
+                    className="mt-3 flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3"
+                  >
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-gray-500">
+                        Data
+                      </span>
+                      <input
+                        type="date"
+                        name="data"
+                        defaultValue={oggi}
+                        required
+                        className={mini}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-gray-500">
+                        Importo (€)
+                      </span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        name="importo"
+                        required
+                        defaultValue={
+                          ic.esigibileDaPagare > 0
+                            ? ic.esigibileDaPagare.toFixed(2)
+                            : ""
+                        }
+                        className={`${mini} w-28`}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-gray-500">
+                        Note
+                      </span>
+                      <input
+                        name="note"
+                        placeholder="es. interessi 2025"
+                        className={`${mini} w-48`}
+                      />
+                    </label>
+                    <button className={btn}>Registra pagamento</button>
+                  </form>
+
+                  <form
+                    action={impostaTassoCauzione.bind(null, c.id)}
+                    className="mt-4 flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3"
+                  >
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-gray-500">
+                        Tasso annuo personalizzato (%), se diverso dal legale
+                      </span>
+                      <input
+                        type="number"
+                        step="0.001"
+                        name="tasso"
+                        defaultValue={c.tassoCauzione ?? ""}
+                        placeholder={`legale (oggi ${String(tassoLegale(new Date().getFullYear())).replace(".", ",")}%)`}
+                        className={`${mini} w-56`}
+                      />
+                    </label>
+                    <button className={btn}>Salva tasso</button>
+                  </form>
+                </>
+              )}
             </section>
           );
         })()}

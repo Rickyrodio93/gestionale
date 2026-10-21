@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, MoveRight, Plus, RefreshCw } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  MoveRight,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { dataIt } from "@/lib/format";
 import { eventiCalendario, TIPI_EVENTO } from "@/lib/eventi";
@@ -52,9 +58,15 @@ export default async function Calendario({ searchParams }) {
     .filter((e) => e.fine > oggiStr && e.inizio <= limite)
     .slice(0, 30);
   const periodo = (e) =>
-    e.tipo === "prenotazione" || e.tipo === "occupato"
-      ? `${dataIt(e.inizio)} ${<MoveRight size={16} />} ${dataIt(e.fine)}`
-      : dataIt(e.inizio);
+    e.tipo === "prenotazione" || e.tipo === "occupato" ? (
+      <>
+        {dataIt(e.inizio)}
+        <MoveRight size={16} />
+        {dataIt(e.fine)}
+      </>
+    ) : (
+      dataIt(e.inizio)
+    );
 
   const btn =
     "inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50";
@@ -185,8 +197,14 @@ export default async function Calendario({ searchParams }) {
                     key={e.id}
                     className="flex items-start justify-between gap-3 text-sm"
                   >
-                    <Link href={e.link} className="hover:underline">
-                      <span className="text-gray-500">{periodo(e)}</span> ·{" "}
+                    <Link
+                      href={e.link}
+                      className="hover:underline flex items-center gap-1"
+                    >
+                      <span className="text-gray-500 flex items-center gap-1">
+                        {periodo(e)}
+                      </span>
+                      {"· "}
                       {e.titolo}
                     </Link>
                     <span
@@ -206,7 +224,7 @@ export default async function Calendario({ searchParams }) {
             </h2>
             {unitaBrevi.lenght === 0 ? (
               <p className="text-sm text-gray-500">
-                Nessuna unità segnata come affitto breve: spunta l'opzione da
+                Nessuna unità segnata come affitto breve: spunta l&apos;opzione da
                 Appartamenti → Modifica.
               </p>
             ) : (

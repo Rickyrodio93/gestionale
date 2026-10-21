@@ -1,6 +1,6 @@
 # Gestionale Appartamenti: stato del progetto
 
-Aggiornato al 17 ottobre 2026. Serve per riprendere il lavoro in una nuova conversazione senza rispiegare tutto.
+Aggiornato al 21 ottobre 2026. Serve per riprendere il lavoro in una nuova conversazione senza rispiegare tutto.
 
 ## 1. Cos'è e come lavoriamo
 
@@ -70,7 +70,7 @@ lib/
 | Area | Modelli |
 |---|---|
 | Immobili | `Palazzina`, `Unita`, `DatiCatastali`, `ValoreImmobile` (stime: mercato, perizia, OMI) |
-| Locazioni lunghe e transitorie | `Inquilino`, `Contratto`, `PagamentoCanone`, `TrattenutaCauzione`, `Versamento`, `Addebito`, `PagamentoAddebito` |
+| Locazioni lunghe e transitorie | `Inquilino`, `Contratto`, `PagamentoCanone`, `TrattenutaCauzione`, `PagamentoInteresse`, `Versamento`, `Addebito`, `PagamentoAddebito` |
 | Utenze | `Contatore`, `Lettura`, `Bolletta`, `Quota`, `Pagamento` |
 | Spese | `Spesa`, `SpesaRicorrente`, `DilazioneImposta`, `RataDilazione` |
 | Affitti brevi | `Incasso` (netto accreditato dall'agenzia), `Prenotazione` |
@@ -93,7 +93,7 @@ Punti da ricordare:
 **Entrate**
 - Contratti lunghi e transitori: scadenza, ultimo giorno per la disdetta con semaforo, rinnovo alle stesse condizioni o **con nuove condizioni** (nuovo contratto collegato), occupazione dopo la scadenza, rilascio.
 - Canoni incassati con periodicità (mensile, trimestrale in anticipo, unica soluzione), arretrati, «segna incassati i periodi precedenti a».
-- **Cauzione**: prospetto a fine contratto, trattenute, liquidazione e annullo.
+- **Cauzione**: prospetto a fine contratto, trattenute, liquidazione e annullo. **Interessi legali sulla cauzione**: maturano giorno per giorno dal versamento, per anno solare, al tasso legale dell'anno (tabella in `lib/interessiCauzione.js`) o a un tasso personalizzato per contratto; tabella per anno nella scheda del contratto e nel report dell'inquilino (stampabile), registrazione dei pagamenti fatti, interessi da riconoscere sommati alla cauzione nel prospetto e nel saldo.
 - **Posizione dell'inquilino**: versamenti liberi distribuiti dal debito più vecchio, addebiti vari, report stampabile come il Word usato finora, saldo con la cauzione.
 - Incassi degli affitti brevi (netti), con anno e totali.
 
@@ -109,7 +109,7 @@ Punti da ricordare:
 
 **Calendario**: prenotazioni importate dal link iCal di Airbnb o dell'agenzia (le sparite diventano annullate), inserimento manuale, scadenze dei contratti e promemoria di disdetta a 90 e 30 giorni, periodi dei transitori, rate di mutuo, pagamenti ricorrenti, rate delle dilazioni, scadenze IMU e cedolare.
 
-**Dashboard**: banner utile o perdita con confronto con l'anno scorso, indicatori, grafici (mensile, cumulato per anno, totali per anno, uscite per categoria, investimenti, debito residuo, occupazione), tabella costo e incasso al giorno, scadenze dei contratti, IMU, cedolare, **risultato per competenza**.
+**Dashboard**: banner utile o perdita con confronto con l'anno scorso e barra entrate/uscite, sezione **«Cosa richiede attenzione»** (contratti da seguire, canoni arretrati, bollette da incassare, rate di dilazione, IMU entro 45 giorni; i riquadri sono link), indicatori (entrate, uscite, margine, cedolare), grafico mensile, **due torte ad anello** (entrate per tipo di affitto, uscite per categoria: la somma delle fette è uguale ai totali del banner, colore fisso per categoria, `fill` nei dati e non `Cell`), confronto cumulato, totali per anno, uscite per categoria a confronto con l'anno scorso, tabella costo e incasso al giorno, scadenze dei contratti, IMU, cedolare, **risultato per competenza**.
 
 **Interfaccia**: tema scuro scelto con il tasto sole/luna e ricordato in un cookie; menu a scomparsa su telefono; tabelle che scorrono di lato dentro la scheda; fumetti uniformi con `Tooltip`.
 
@@ -123,6 +123,8 @@ Punti da ricordare:
 - Tipologia OMI scelta dalla categoria catastale: A/1-A/6 abitazioni civili (A/3-A/5 prima «tipo economico»), A/7-A/9 ville e villini, C/6 box, C/1 negozi, A/10 uffici; in mancanza, dal tipo di unità. Se manca la fascia dello stato scelto si usa la Normale e la tabella lo segnala.
 - I pagamenti generati dai versamenti dell'inquilino non si modificano a mano: si usa «Ricalcola attribuzione».
 
+- **Interessi sulla cauzione**: `interesse = cauzione × tasso% × giorni / giorni dell'anno` per ogni anno solare (anno pieno = esattamente il tasso, anche bisestile); dal giorno del versamento incluso al giorno di fine escluso (oggi se aperta, data di liquidazione se liquidata). Tassi legali verificati: 2021 0,01%, 2022 1,25%, 2023 5%, 2024 2,5%, 2025 2%, 2026 1,60% (decreto MEF 10/12/2025); se il MEF non pubblica un decreto resta l'ultimo noto. Alla liquidazione gli interessi non ancora pagati si sommano alla cauzione prima di compensare i debiti e si salvano in `Contratto.interessiLiquidati`; `trattenuto = cauzione + interessiLiquidati − restituita`. Nel rinnovo con nuove condizioni cauzione, pagamenti di interessi e tasso passano al nuovo contratto (gli interessi maturano dal versamento originale). Gli interessi pagati non sono ancora registrati come spesa.
+
 ## 7. Errori già incontrati e risolti
 
 - Prisma 7 al posto del 6; enum su una riga; client non rigenerato; parentesi quadre in PowerShell.
@@ -133,6 +135,7 @@ Punti da ricordare:
 - Modulo «Registra incasso» senza il campo `data`: l'azione scartava l'invio senza errori. I moduli server action vanno controllati campo per campo rispetto a quello che legge l'azione.
 - `creaUnita` creava l'unità due volte (una prima di controllare gli errori): corretto. L'indirizzo non veniva salvato per le unità in palazzina.
 - Il lettore KML cercava un codice zona tipo `RM00001234` che nei file reali non c'è: ora legge `CODCOM` e `CODZONA`.
+- Dashboard: il blocco del risultato aveva perso le classi (`className={``}`) e la scadenza IMU di dicembre era scritta come giugno, quindi dopo il 16 giugno la «prossima IMU» saltava il saldo: corretto.
 - Importatore OMI: il codice del comune si confronta con **`Comune_amm`** (codice catastale tipo C933) e non con `Comune_cat`.
 
 ## 8. Da verificare (non ancora provato)
@@ -147,6 +150,14 @@ Punti da ricordare:
 **Fatto il 17/10/2026:** eliminata la sezione OMI dedicata (cartella `investimenti/valutazione`, `CardValutazione`, `FormPosizione`). Indirizzo (via, civico, comune), coordinate manuali e stato dell'immobile sono nel modulo palazzina/unità; la sezione con caricamento file e valori min/medio/max sta in fondo a Investimenti. Migrazione Prisma `indirizzo_condizioni` (`civico` su Palazzina e Unita, `condizioni` su Unita).
 
 **Da fare dopo la sostituzione dei file:** migrazione, riavvio, poi aprire ogni unità (le esistenti hanno stato «normale» e vanno completate con via e civico) e caricare i tre file OMI di Varese.
+
+**Fatto il 21/10/2026 (interessi sulla cauzione):** nuovi `lib/interessiCauzione.js`, `entrate/interessiActions.js`; modificati `lib/cauzione.js`, `lib/rapporto.js`, `entrate/actions.js` (liquidazione, annullo, rinnovo), scheda contratto e report inquilino. Migrazione Prisma `interessi_cauzione` (`Contratto.tassoCauzione`, `Contratto.interessiLiquidati`, modello `PagamentoInteresse`). La scheda del contratto contiene anche la correzione del modulo «Registra» canoni del 16/10.
+
+**Da verificare:** con un contratto reale con cauzione versata, controllare gli importi per anno e una liquidazione di prova (poi annullarla). Idee: riquadro in dashboard con gli interessi esigibili non pagati; registrare gli interessi pagati come spesa.
+
+**Fatto il 20/10/2026 (dashboard):** nuova sezione «Cosa richiede attenzione», torte ad anello di entrate e uscite, risultato in evidenza con barra, correzioni di testo e della data del saldo IMU. File: `src/app/page.jsx`, `src/components/DashboardCharts.jsx` (nuovo `Composizione`). Da fare: palette e font (fase 1) e tabelle impilate su telefono (fase 3) del piano di design, in attesa dell'ok sulla direzione (petrolio al posto dell'indaco, meno schede).
+
+**Nota:** il dump GitHub in `/mnt/project` è ancora la versione del 15/10: non contiene le modifiche OMI né questo file. La versione corrente di `PROGRESS.md` è questa.
 
 **Bug notati e non ancora corretti:** `FormAcquistoVendita` usa `prezzoVendita` e `costiVendita` anche nella sezione Acquisto (il prezzo di acquisto non si può salvare da lì); `investimenti/vendite/page.jsx` non importa `prisma` e ha la chiave `CONCUSA` al posto di `CONCLUSA`; `[tipo]/[id]/page.jsx` ha il link `dest=tipo:${n}` invece di `${tipo}:${n}`; `calendario/page.jsx` ha `unitaBrevi.lenght` e mette un componente dentro una stringa in `periodo`; `eventi.js` ha `c.modalia`; `FormContratto` ha `mod === "REANSITORIO"` e `setCed(e.target.value)` al posto di `checked`.
 
